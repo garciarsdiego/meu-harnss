@@ -1,5 +1,16 @@
 /**
  * Jira integration types shared between electron and renderer processes
+ *
+ * This implementation is designed to be extensible for future issue tracking
+ * integrations (e.g., Linear, GitHub Issues, etc.). To add support for a new
+ * provider:
+ *
+ * 1. Create similar types in shared/types/{provider}.ts
+ * 2. Create IPC handlers in electron/src/ipc/{provider}.ts
+ * 3. Create storage utilities in electron/src/lib/{provider}-store.ts
+ * 4. Create UI components in src/components/{Provider}BoardPanel.tsx
+ * 5. Add to ToolPicker as a new tool option
+ * 6. Add provider-specific authentication flow if needed
  */
 
 export interface JiraProjectConfig {
