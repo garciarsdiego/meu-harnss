@@ -28,6 +28,8 @@ import { ProjectFilesPanel } from "./ProjectFilesPanel";
 import { FilePreviewOverlay } from "./FilePreviewOverlay";
 import { SettingsView } from "./SettingsView";
 import { CodexAuthDialog } from "./CodexAuthDialog";
+import { JiraBoardPanel } from "./JiraBoardPanel";
+import type { JiraIssue } from "@shared/types/jira";
 import { isMac } from "@/lib/utils";
 
 export function AppLayout() {
@@ -90,6 +92,32 @@ export function AppLayout() {
     },
     [handleSend],
   );
+
+  // Handler for creating task from Jira issue
+  const handleCreateTaskFromJiraIssue = useCallback(
+    (issue: JiraIssue) => {
+      const taskMessage = `Please help me work on this Jira issue:
+
+**${issue.key}: ${issue.summary}**
+
+${issue.description ? `\n${issue.description}\n` : ""}
+${issue.assignee ? `Assigned to: ${issue.assignee.displayName}\n` : ""}
+Status: ${issue.status}
+${issue.priority ? `Priority: ${issue.priority.name}\n` : ""}
+
+Link: ${issue.url}`;
+
+      handleSend({ text: taskMessage, images: [] });
+    },
+    [handleSend],
+  );
+
+  const [showJiraBoard, setShowJiraBoard] = useState(false);
+
+  const handleOpenJiraBoard = useCallback(() => {
+    // Toggle the Jira tool in activeTools
+    handleToggleTool("jira");
+  }, [handleToggleTool]);
 
   const isIsland = settings.islandLayout;
   const minChatWidth = getMinChatWidth(isIsland);
@@ -243,6 +271,7 @@ export function AppLayout() {
                   showDevFill={devFillEnabled}
                   onSeedDevExampleConversation={manager.seedDevExampleConversation}
                   onSeedDevExampleSpaceData={handleSeedDevExampleSpaceData}
+                  onOpenJiraBoard={activeProjectId ? handleOpenJiraBoard : undefined}
                 />
               </div>
               {chatSearchOpen && (
@@ -502,6 +531,12 @@ export function AppLayout() {
                       isProcessing={manager.isProcessing}
                       focusTurnIndex={changesPanelFocusTurn}
                       onFocusTurnHandled={() => setChangesPanelFocusTurn(undefined)}
+                    />
+                  ),
+                  jira: (
+                    <JiraBoardPanel
+                      projectId={activeProjectId ?? null}
+                      onCreateTask={handleCreateTaskFromJiraIssue}
                     />
                   ),
                 };

@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ChevronDown, Info, Loader2, PanelLeft } from "lucide-react";
+import { ChevronDown, Info, Loader2, PanelLeft, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -34,6 +34,7 @@ interface ChatHeaderProps {
   showDevFill?: boolean;
   onSeedDevExampleConversation?: () => void;
   onSeedDevExampleSpaceData?: () => void;
+  onOpenJiraBoard?: () => void;
 }
 
 export const ChatHeader = memo(function ChatHeader({
@@ -51,6 +52,7 @@ export const ChatHeader = memo(function ChatHeader({
   showDevFill,
   onSeedDevExampleConversation,
   onSeedDevExampleSpaceData,
+  onOpenJiraBoard,
 }: ChatHeaderProps) {
   const modeLabel = permissionMode ? PERMISSION_MODE_LABELS[permissionMode] : null;
   const acpBehaviorLabel = acpPermissionBehavior
@@ -124,8 +126,25 @@ export const ChatHeader = memo(function ChatHeader({
       ) : null}
 
       {/* Session info — subtle icon, hover reveals model / permissions / cost / session ID */}
-      {(showDevSeedButton || hasDetails) && (
+      {(showDevSeedButton || hasDetails || onOpenJiraBoard) && (
         <div className="ms-auto flex items-center gap-1.5">
+          {onOpenJiraBoard && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="no-drag h-6 w-6 p-0"
+                  onClick={onOpenJiraBoard}
+                >
+                  <ListTodo className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <span className="text-xs">Open Jira Board</span>
+              </TooltipContent>
+            </Tooltip>
+          )}
           {showDevSeedButton && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
