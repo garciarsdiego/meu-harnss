@@ -27,12 +27,18 @@ export function JiraAuthDialog({
   instanceUrl,
   onSuccess,
 }: JiraAuthDialogProps) {
+  const [email, setEmail] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!email.trim()) {
+      setError("Email is required");
+      return;
+    }
 
     if (!apiToken.trim()) {
       setError("API token is required");
@@ -46,7 +52,8 @@ export function JiraAuthDialog({
       const result = await window.claude.jira.authenticate(
         instanceUrl,
         "apitoken",
-        apiToken
+        apiToken,
+        email.trim()
       );
 
       if (result.error) {
@@ -54,6 +61,7 @@ export function JiraAuthDialog({
         setLoading(false);
       } else {
         setLoading(false);
+        setEmail("");
         setApiToken("");
         onSuccess();
         onOpenChange(false);
@@ -66,6 +74,7 @@ export function JiraAuthDialog({
 
   const handleClose = () => {
     if (!loading) {
+      setEmail("");
       setApiToken("");
       setError(null);
       onOpenChange(false);
@@ -98,6 +107,24 @@ export function JiraAuthDialog({
             </div>
 
             <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium">
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                autoFocus
+              />
+              <p className="text-sm text-muted-foreground">
+                The email associated with your Atlassian account
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <label htmlFor="apiToken" className="text-sm font-medium">
                 API Token
               </label>
@@ -108,7 +135,6 @@ export function JiraAuthDialog({
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
                 disabled={loading}
-                autoFocus
               />
               <p className="text-sm text-muted-foreground">
                 Create a token at{" "}

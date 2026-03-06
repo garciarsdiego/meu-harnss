@@ -32,6 +32,19 @@ import { JiraBoardPanel } from "./JiraBoardPanel";
 import type { JiraIssue } from "@shared/types/jira";
 import { isMac } from "@/lib/utils";
 
+const JIRA_BOARD_BY_SPACE_KEY = "harnss-jira-board-by-space";
+
+function readJiraBoardBySpace(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(JIRA_BOARD_BY_SPACE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
 export function AppLayout() {
   const o = useAppOrchestrator();
   const {
@@ -84,6 +97,26 @@ export function AppLayout() {
     setPreviewFile(null);
   }, []);
 
+  const [jiraBoardBySpace, setJiraBoardBySpace] = useState<Record<string, string>>(() => readJiraBoardBySpace());
+  const jiraBoardProjectId = jiraBoardBySpace[spaceManager.activeSpaceId] ?? null;
+  const jiraBoardProject = jiraBoardProjectId
+    ? projectManager.projects.find((project) => project.id === jiraBoardProjectId) ?? null
+    : null;
+  const [pendingJiraTask, setPendingJiraTask] = useState<{ projectId: string; message: string } | null>(null);
+
+  const setJiraBoardProjectForSpace = useCallback((spaceId: string, projectId: string | null) => {
+    setJiraBoardBySpace((prev) => {
+      const next = { ...prev };
+      if (projectId) {
+        next[spaceId] = projectId;
+      } else {
+        delete next[spaceId];
+      }
+      localStorage.setItem(JIRA_BOARD_BY_SPACE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   // Wrap handleSend to clear grabbed elements after sending
   const wrappedHandleSend = useCallback(
     (...args: Parameters<typeof handleSend>) => {
@@ -93,9 +126,42 @@ export function AppLayout() {
     [handleSend],
   );
 
+  const handleSidebarNewChat = useCallback(
+    async (projectId: string) => {
+      const project = projectManager.projects.find((item) => item.id === projectId);
+      if (project) {
+        setJiraBoardProjectForSpace(project.spaceId || "default", null);
+      }
+      await handleNewChat(projectId);
+    },
+    [handleNewChat, projectManager.projects, setJiraBoardProjectForSpace],
+  );
+
+  const handleSidebarSelectSession = useCallback(
+    (sessionId: string) => {
+      const session = manager.sessions.find((item) => item.id === sessionId);
+      const project = session
+        ? projectManager.projects.find((item) => item.id === session.projectId)
+        : null;
+      if (project) {
+        setJiraBoardProjectForSpace(project.spaceId || "default", null);
+      }
+      handleSelectSession(sessionId);
+    },
+    [handleSelectSession, manager.sessions, projectManager.projects, setJiraBoardProjectForSpace],
+  );
+
+  const handleToggleProjectJiraBoard = useCallback((projectId: string) => {
+    const project = projectManager.projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const spaceId = project.spaceId || "default";
+    const currentProjectId = jiraBoardBySpace[spaceId];
+    setJiraBoardProjectForSpace(spaceId, currentProjectId === projectId ? null : projectId);
+  }, [jiraBoardBySpace, projectManager.projects, setJiraBoardProjectForSpace]);
+
   // Handler for creating task from Jira issue
   const handleCreateTaskFromJiraIssue = useCallback(
-    (issue: JiraIssue) => {
+    (projectId: string, issue: JiraIssue) => {
       const taskMessage = `Please help me work on this Jira issue:
 
 **${issue.key}: ${issue.summary}**
@@ -107,17 +173,56 @@ ${issue.priority ? `Priority: ${issue.priority.name}\n` : ""}
 
 Link: ${issue.url}`;
 
-      handleSend({ text: taskMessage, images: [] });
+      const project = projectManager.projects.find((item) => item.id === projectId);
+      if (project) {
+        setJiraBoardProjectForSpace(project.spaceId || "default", null);
+      }
+
+      if (activeProjectId === projectId && manager.activeSessionId) {
+        handleSend(taskMessage);
+        return;
+      }
+
+      setPendingJiraTask({ projectId, message: taskMessage });
+      void handleNewChat(projectId);
     },
-    [handleSend],
+    [activeProjectId, handleNewChat, handleSend, manager.activeSessionId, projectManager.projects, setJiraBoardProjectForSpace],
   );
 
-  const [showJiraBoard, setShowJiraBoard] = useState(false);
+  useEffect(() => {
+    setJiraBoardBySpace((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
 
-  const handleOpenJiraBoard = useCallback(() => {
-    // Toggle the Jira tool in activeTools
-    handleToggleTool("jira");
-  }, [handleToggleTool]);
+      for (const [spaceId, projectId] of Object.entries(prev)) {
+        const project = projectManager.projects.find((item) => item.id === projectId);
+        if (!project) {
+          changed = true;
+          continue;
+        }
+        const projectSpaceId = project.spaceId || "default";
+        if (next[projectSpaceId] !== projectId) {
+          next[projectSpaceId] = projectId;
+        }
+        if (projectSpaceId !== spaceId) {
+          changed = true;
+        }
+      }
+
+      if (!changed && Object.keys(next).length === Object.keys(prev).length) {
+        return prev;
+      }
+      localStorage.setItem(JIRA_BOARD_BY_SPACE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [projectManager.projects]);
+
+  useEffect(() => {
+    if (!pendingJiraTask) return;
+    if (activeProjectId !== pendingJiraTask.projectId || !manager.activeSessionId) return;
+    setPendingJiraTask(null);
+    handleSend(pendingJiraTask.message);
+  }, [activeProjectId, handleSend, manager.activeSessionId, pendingJiraTask]);
 
   const isIsland = settings.islandLayout;
   const minChatWidth = getMinChatWidth(isIsland);
@@ -195,8 +300,10 @@ Link: ${issue.url}`;
         projects={projectManager.projects}
         sessions={manager.sessions}
         activeSessionId={manager.activeSessionId}
-        onNewChat={handleNewChat}
-        onSelectSession={handleSelectSession}
+        jiraBoardProjectId={jiraBoardProjectId}
+        onNewChat={handleSidebarNewChat}
+        onToggleProjectJiraBoard={handleToggleProjectJiraBoard}
+        onSelectSession={handleSidebarSelectSession}
         onDeleteSession={manager.deleteSession}
         onRenameSession={manager.renameSession}
         onCreateProject={handleCreateProject}
@@ -241,7 +348,17 @@ Link: ${issue.url}`;
           className="chat-island island relative flex flex-1 flex-col overflow-hidden rounded-lg bg-background"
           style={{ minWidth: minChatWidth, "--chat-fade-strength": String(chatFadeStrength) } as React.CSSProperties}
         >
-          {manager.activeSessionId ? (
+          {jiraBoardProject ? (
+            <JiraBoardPanel
+              projectId={jiraBoardProject.id}
+              projectName={jiraBoardProject.name}
+              variant="main"
+              onClose={() => setJiraBoardProjectForSpace(spaceManager.activeSpaceId, null)}
+              sidebarOpen={sidebar.isOpen}
+              onToggleSidebar={sidebar.toggle}
+              onCreateTask={handleCreateTaskFromJiraIssue}
+            />
+          ) : manager.activeSessionId ? (
             <>
               {/* Top fade: only visible when chat is scrolled down. Island mode uses dark shadow; flat mode fades content into bg */}
               {/* Island: gradient starts at top-0 (behind header, subtle bleed). Flat: starts at top-10 (right below header) so full gradient is visible and strong. */}
@@ -271,7 +388,6 @@ Link: ${issue.url}`;
                   showDevFill={devFillEnabled}
                   onSeedDevExampleConversation={manager.seedDevExampleConversation}
                   onSeedDevExampleSpaceData={handleSeedDevExampleSpaceData}
-                  onOpenJiraBoard={activeProjectId ? handleOpenJiraBoard : undefined}
                 />
               </div>
               {chatSearchOpen && (
@@ -531,12 +647,6 @@ Link: ${issue.url}`;
                       isProcessing={manager.isProcessing}
                       focusTurnIndex={changesPanelFocusTurn}
                       onFocusTurnHandled={() => setChangesPanelFocusTurn(undefined)}
-                    />
-                  ),
-                  jira: (
-                    <JiraBoardPanel
-                      projectId={activeProjectId ?? null}
-                      onCreateTask={handleCreateTaskFromJiraIssue}
                     />
                   ),
                 };

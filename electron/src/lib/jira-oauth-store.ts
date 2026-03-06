@@ -84,5 +84,6 @@ export function hasJiraOAuthToken(instanceUrl: string): boolean {
     return false;
   }
 
-  return !!oauthData.accessToken;
+  // Require email for Jira Cloud Basic auth (legacy tokens without email are invalid)
+  return !!oauthData.accessToken && !!oauthData.email;
 }

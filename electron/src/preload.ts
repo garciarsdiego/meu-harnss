@@ -247,14 +247,25 @@ contextBridge.exposeInMainWorld("claude", {
     saveConfig: (projectId: string, config: unknown) =>
       ipcRenderer.invoke("jira:save-config", { projectId, config }),
     deleteConfig: (projectId: string) => ipcRenderer.invoke("jira:delete-config", projectId),
-    authenticate: (instanceUrl: string, method: "oauth" | "apitoken", apiToken?: string) =>
-      ipcRenderer.invoke("jira:authenticate", { instanceUrl, method, apiToken }),
+    authenticate: (instanceUrl: string, method: "oauth" | "apitoken", apiToken?: string, email?: string) =>
+      ipcRenderer.invoke("jira:authenticate", { instanceUrl, method, apiToken, email }),
     authStatus: (instanceUrl: string) => ipcRenderer.invoke("jira:auth-status", instanceUrl),
     logout: (instanceUrl: string) => ipcRenderer.invoke("jira:logout", instanceUrl),
+    getProjects: (instanceUrl: string) => ipcRenderer.invoke("jira:get-projects", instanceUrl),
     getBoards: (params: { instanceUrl: string; projectKey?: string }) =>
       ipcRenderer.invoke("jira:get-boards", params),
-    getIssues: (params: { instanceUrl: string; boardId: string; maxResults?: number }) =>
+    getBoardConfiguration: (params: { instanceUrl: string; boardId: string }) =>
+      ipcRenderer.invoke("jira:get-board-configuration", params),
+    getSprints: (params: { instanceUrl: string; boardId: string }) =>
+      ipcRenderer.invoke("jira:get-sprints", params),
+    getIssues: (params: { instanceUrl: string; boardId: string; sprintId?: string; maxResults?: number }) =>
       ipcRenderer.invoke("jira:get-issues", params),
+    getComments: (params: { instanceUrl: string; issueKey: string }) =>
+      ipcRenderer.invoke("jira:get-comments", params),
+    getTransitions: (params: { instanceUrl: string; issueKey: string }) =>
+      ipcRenderer.invoke("jira:get-transitions", params),
+    transitionIssue: (params: { instanceUrl: string; issueKey: string; transitionId: string }) =>
+      ipcRenderer.invoke("jira:transition-issue", params),
   },
   speech: {
     startNativeDictation: () => ipcRenderer.invoke("speech:start-native-dictation"),

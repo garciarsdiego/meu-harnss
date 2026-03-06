@@ -5,6 +5,7 @@ import {
   MoreHorizontal,
   FolderOpen,
   SquarePen,
+  KanbanSquare,
   ChevronRight,
   ChevronDown,
   History,
@@ -74,7 +75,9 @@ export function ProjectSection({
   project,
   sessions,
   activeSessionId,
+  isJiraBoardOpen,
   onNewChat,
+  onToggleJiraBoard,
   onSelectSession,
   onDeleteSession,
   onRenameSession,
@@ -90,7 +93,9 @@ export function ProjectSection({
   project: Project;
   sessions: ChatSession[];
   activeSessionId: string | null;
+  isJiraBoardOpen: boolean;
   onNewChat: () => void;
+  onToggleJiraBoard: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   onRenameSession: (id: string, title: string) => void;
@@ -199,7 +204,21 @@ export function ProjectSection({
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 shrink-0 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:!bg-black/10 dark:hover:!bg-sidebar-accent/50 opacity-0 transition-opacity group-hover:opacity-100"
+          className={`h-6 w-6 shrink-0 hover:text-sidebar-foreground hover:!bg-black/10 dark:hover:!bg-sidebar-accent/50 transition-opacity ${
+            isJiraBoardOpen
+              ? "opacity-100 text-sidebar-foreground bg-sidebar-accent/60"
+              : "opacity-100 text-sidebar-foreground/50"
+          }`}
+          onClick={onToggleJiraBoard}
+          title="Open Jira board"
+        >
+          <KanbanSquare className="h-3.5 w-3.5" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:!bg-black/10 dark:hover:!bg-sidebar-accent/50 opacity-100 transition-opacity"
           onClick={onNewChat}
         >
           <SquarePen className="h-3.5 w-3.5" />
@@ -210,7 +229,7 @@ export function ProjectSection({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 shrink-0 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:!bg-black/10 dark:hover:!bg-sidebar-accent/50 opacity-0 transition-opacity group-hover:opacity-100"
+              className="h-6 w-6 shrink-0 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:!bg-black/10 dark:hover:!bg-sidebar-accent/50 opacity-100 transition-opacity"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>

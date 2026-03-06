@@ -15,8 +15,17 @@ import type {
   JiraProjectConfig,
   JiraBoard,
   JiraIssue,
+  JiraSprint,
+  JiraComment,
+  JiraTransition,
+  JiraBoardConfiguration,
+  JiraProjectSummary,
   JiraGetBoardsParams,
   JiraGetIssuesParams,
+  JiraGetSprintsParams,
+  JiraGetCommentsParams,
+  JiraGetTransitionsParams,
+  JiraTransitionIssueParams,
 } from "@shared/types/jira";
 
 interface SessionListItem {
@@ -298,12 +307,19 @@ declare global {
         authenticate: (
           instanceUrl: string,
           method: "oauth" | "apitoken",
-          apiToken?: string
+          apiToken?: string,
+          email?: string
         ) => Promise<{ ok?: boolean; error?: string }>;
         authStatus: (instanceUrl: string) => Promise<{ hasToken: boolean }>;
         logout: (instanceUrl: string) => Promise<void>;
+        getProjects: (instanceUrl: string) => Promise<JiraProjectSummary[]>;
         getBoards: (params: JiraGetBoardsParams) => Promise<JiraBoard[]>;
+        getBoardConfiguration: (params: JiraGetSprintsParams) => Promise<JiraBoardConfiguration>;
+        getSprints: (params: JiraGetSprintsParams) => Promise<JiraSprint[]>;
         getIssues: (params: JiraGetIssuesParams) => Promise<JiraIssue[]>;
+        getComments: (params: JiraGetCommentsParams) => Promise<JiraComment[]>;
+        getTransitions: (params: JiraGetTransitionsParams) => Promise<JiraTransition[]>;
+        transitionIssue: (params: JiraTransitionIssueParams) => Promise<{ ok: true }>;
       };
       speech: {
         /** Triggers macOS native dictation (Cocoa startDictation: selector). Returns { ok: false } on non-macOS. */

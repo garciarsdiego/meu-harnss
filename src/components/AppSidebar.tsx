@@ -15,7 +15,9 @@ interface AppSidebarProps {
   projects: Project[];
   sessions: ChatSession[];
   activeSessionId: string | null;
+  jiraBoardProjectId: string | null;
   onNewChat: (projectId: string) => void;
+  onToggleProjectJiraBoard: (projectId: string) => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   onRenameSession: (id: string, title: string) => void;
@@ -42,7 +44,9 @@ export const AppSidebar = memo(function AppSidebar({
   projects,
   sessions,
   activeSessionId,
+  jiraBoardProjectId,
   onNewChat,
+  onToggleProjectJiraBoard,
   onSelectSession,
   onDeleteSession,
   onRenameSession,
@@ -206,7 +210,9 @@ export const AppSidebar = memo(function AppSidebar({
                   project={project}
                   sessions={projectSessions}
                   activeSessionId={activeSessionId}
+                  isJiraBoardOpen={jiraBoardProjectId === project.id}
                   onNewChat={() => onNewChat(project.id)}
+                  onToggleJiraBoard={() => onToggleProjectJiraBoard(project.id)}
                   onSelectSession={onSelectSession}
                   onDeleteSession={onDeleteSession}
                   onRenameSession={onRenameSession}

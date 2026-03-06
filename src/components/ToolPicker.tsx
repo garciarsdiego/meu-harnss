@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { Terminal, Globe, GitBranch, FileText, FolderTree, ListTodo, Bot, Plug, SquareArrowOutUpRight, FileDiff, KanbanSquare } from "lucide-react";
+import { Terminal, Globe, GitBranch, FileText, FolderTree, ListTodo, Bot, Plug, SquareArrowOutUpRight, FileDiff } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export type ToolId = "terminal" | "browser" | "git" | "files" | "project-files" | "tasks" | "agents" | "mcp" | "changes" | "jira";
+export type ToolId = "terminal" | "browser" | "git" | "files" | "project-files" | "tasks" | "agents" | "mcp" | "changes";
 
 interface ToolDef {
   id: ToolId;
@@ -25,7 +25,6 @@ const PANEL_TOOLS_MAP: Record<string, ToolDef> = {
   "project-files": { id: "project-files", label: "Project Files", icon: FolderTree },
   mcp: { id: "mcp", label: "MCP Servers", icon: Plug },
   changes: { id: "changes", label: "Changes", icon: FileDiff },
-  jira: { id: "jira", label: "Jira Board", icon: KanbanSquare },
 };
 
 /** Tool IDs that render in the tools column (not contextual right-panel tools). */
