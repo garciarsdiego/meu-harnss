@@ -10,3 +10,8 @@ export function finalizeQueuedMessage(messages: UIMessage[], messageId: string):
   const queued = rest.filter((message) => message.isQueued);
   return [...nonQueued, sentMessage, ...queued];
 }
+
+export function removeQueuedMessage(messages: UIMessage[], messageId: string): UIMessage[] {
+  const nextMessages = messages.filter((message) => message.id !== messageId);
+  return nextMessages.length === messages.length ? messages : nextMessages;
+}

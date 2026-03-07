@@ -4,7 +4,7 @@ import type { CollaborationMode } from "../../types/codex-protocol/Collaboration
 import { imageAttachmentsToCodexInputs } from "../../lib/codex-adapter";
 import { suppressNextSessionCompletion } from "../../lib/notification-utils";
 import { buildSdkContent } from "../../lib/protocol";
-import { finalizeQueuedMessage } from "./message-queue-utils";
+import { finalizeQueuedMessage, removeQueuedMessage } from "./message-queue-utils";
 import { buildCodexCollabMode, DRAFT_ID } from "./types";
 import type { SharedSessionRefs, SharedSessionSetters, EngineHooks, QueuedMessage } from "./types";
 
@@ -160,7 +160,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     isDrainingRef.current = true;
 
     const handleSendError = () => {
-      targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
+      targetSetMessages((prev) => removeQueuedMessage(prev, next.messageId));
       targetSetMessages((prev) => [
         ...prev,
         {
