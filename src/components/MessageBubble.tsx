@@ -158,6 +158,8 @@ interface MessageBubbleProps {
   isContinuation?: boolean;
   /** True when this queued message is the prioritized "send next" item */
   isSendNextQueued?: boolean;
+  /** True when this queued message is currently being handed off to the engine */
+  isQueuedInFlight?: boolean;
   /** Called when user clicks "Revert files only" — restores files to state before this message */
   onRevert?: (checkpointId: string) => void;
   /** Called when user clicks "Revert files + chat" — restores files AND truncates conversation */
@@ -171,6 +173,7 @@ export const MessageBubble = memo(function MessageBubble({
   showThinking = true,
   isContinuation,
   isSendNextQueued = false,
+  isQueuedInFlight = false,
   onRevert,
   onFullRevert,
   onSendQueuedNow,
@@ -240,7 +243,9 @@ export const MessageBubble = memo(function MessageBubble({
                   <div className="mt-2 flex items-center gap-2 border-t border-foreground/[0.06] pt-2 text-[11px] text-muted-foreground">
                     <Clock className="h-3 w-3 shrink-0" />
                     <span>Queued</span>
-                    {onSendQueuedNow && (
+                    {isQueuedInFlight ? (
+                      <span className="ms-auto text-[10px] font-medium text-primary/80">Sending…</span>
+                    ) : onSendQueuedNow && (
                       <button
                         type="button"
                         className={cn(
@@ -339,6 +344,7 @@ export const MessageBubble = memo(function MessageBubble({
   prev.message.checkpointId === next.message.checkpointId &&
   prev.message.isQueued === next.message.isQueued &&
   prev.isSendNextQueued === next.isSendNextQueued &&
+  prev.isQueuedInFlight === next.isQueuedInFlight &&
   prev.showThinking === next.showThinking &&
   prev.isContinuation === next.isContinuation &&
   prev.onRevert === next.onRevert &&

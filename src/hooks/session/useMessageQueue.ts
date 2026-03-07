@@ -4,7 +4,12 @@ import type { CollaborationMode } from "../../types/codex-protocol/Collaboration
 import { imageAttachmentsToCodexInputs } from "../../lib/codex-adapter";
 import { suppressNextSessionCompletion } from "../../lib/notification-utils";
 import { buildSdkContent } from "../../lib/protocol";
-import { finalizeQueuedMessage, removeQueuedMessage } from "./message-queue-utils";
+import {
+  collectQueuedMessageIds,
+  finalizeQueuedMessage,
+  prioritizeQueuedEntry,
+  removeQueuedEntry,
+} from "./message-queue-utils";
 import { buildCodexCollabMode, DRAFT_ID } from "./types";
 import type { SharedSessionRefs, SharedSessionSetters, EngineHooks, QueuedMessage } from "./types";
 
@@ -34,7 +39,9 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
   } = refs;
   const isDrainingRef = useRef(false);
   const boundaryWaitRef = useRef<Map<string, BoundaryWaitState>>(new Map());
+  const inFlightQueuedIdRef = useRef<Map<string, string>>(new Map());
   const [sendNextId, setSendNextId] = useState<string | null>(null);
+  const [inFlightQueuedId, setInFlightQueuedId] = useState<string | null>(null);
 
   const getPendingToolMessageIds = useCallback((messages: UIMessage[]) => {
     const ids: string[] = [];
@@ -65,6 +72,17 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     return created;
   }, [messageQueueRef]);
 
+  const syncActiveQueueState = useCallback(() => {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId || sessionId === DRAFT_ID) {
+      setQueuedCount(0);
+      setInFlightQueuedId(null);
+      return;
+    }
+    setQueuedCount(messageQueueRef.current.get(sessionId)?.length ?? 0);
+    setInFlightQueuedId(inFlightQueuedIdRef.current.get(sessionId) ?? null);
+  }, [activeSessionIdRef, messageQueueRef, setQueuedCount]);
+
   /** Add a message to the queue and show it in chat immediately with isQueued styling */
   const enqueueMessage = useCallback((text: string, images?: ImageAttachment[], displayText?: string) => {
     const activeId = activeSessionIdRef.current;
@@ -73,7 +91,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     const msgId = `user-queued-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const queue = getQueueForSession(activeId);
     queue.push({ text, images, displayText, messageId: msgId });
-    setQueuedCount(queue.length);
+    syncActiveQueueState();
     engine.setMessages((prev) => [
       ...prev,
       {
@@ -86,7 +104,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
         ...(displayText ? { displayContent: displayText } : {}),
       },
     ]);
-  }, [activeSessionIdRef, engine.setMessages, getQueueForSession, setQueuedCount]);
+  }, [activeSessionIdRef, engine.setMessages, getQueueForSession, syncActiveQueueState]);
 
   const reorderQueuedMessagesInUI = useCallback((orderedMessageIds: string[]) => {
     const rank = new Map<string, number>();
@@ -117,24 +135,32 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     });
   }, [engine.setMessages]);
 
+  const clearQueueForSession = useCallback((sessionId: string, targetSetMessages: typeof engine.setMessages) => {
+    const queue = messageQueueRef.current.get(sessionId) ?? [];
+    const queuedIds = collectQueuedMessageIds(queue, inFlightQueuedIdRef.current.get(sessionId));
+    messageQueueRef.current.delete(sessionId);
+    boundaryWaitRef.current.delete(sessionId);
+    inFlightQueuedIdRef.current.delete(sessionId);
+    if (activeSessionIdRef.current === sessionId) {
+      setSendNextId(null);
+    }
+    syncActiveQueueState();
+    if (queuedIds.size > 0) {
+      targetSetMessages((prev) => prev.filter((message) => !queuedIds.has(message.id)));
+    }
+  }, [activeSessionIdRef, engine.setMessages, messageQueueRef, syncActiveQueueState]);
+
   /** Clear the entire queue and remove queued messages from chat */
   const clearQueue = useCallback(() => {
     const activeId = activeSessionIdRef.current;
     if (!activeId || activeId === DRAFT_ID) {
       setQueuedCount(0);
+      setInFlightQueuedId(null);
       return;
     }
 
-    const queue = messageQueueRef.current.get(activeId) ?? [];
-    const queuedIds = new Set(queue.map((q) => q.messageId));
-    messageQueueRef.current.delete(activeId);
-    boundaryWaitRef.current.delete(activeId);
-    setSendNextId(null);
-    setQueuedCount(0);
-    if (queuedIds.size > 0) {
-      engine.setMessages((prev) => prev.filter((m) => !queuedIds.has(m.id)));
-    }
-  }, [activeSessionIdRef, engine.setMessages, messageQueueRef, setQueuedCount]);
+    clearQueueForSession(activeId, engine.setMessages);
+  }, [activeSessionIdRef, clearQueueForSession, engine.setMessages, setQueuedCount]);
 
   const drainNextQueuedMessage = useCallback(async () => {
     if (isDrainingRef.current) return;
@@ -143,6 +169,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     const activeId = activeSessionIdRef.current;
     if (!activeId || activeId === DRAFT_ID) return;
     if (!liveSessionIdsRef.current.has(activeId)) return;
+    if (inFlightQueuedIdRef.current.has(activeId)) return;
     const queue = messageQueueRef.current.get(activeId);
     if (!queue || queue.length === 0) return;
 
@@ -150,29 +177,39 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     const targetSetMessages = sessionEngine === "codex" ? codex.setMessages : sessionEngine === "acp" ? acp.setMessages : claude.setMessages;
     const targetSetIsProcessing = sessionEngine === "codex" ? codex.setIsProcessing : sessionEngine === "acp" ? acp.setIsProcessing : claude.setIsProcessing;
 
-    const next = queue.shift()!;
-    if (queue.length === 0) {
-      messageQueueRef.current.delete(activeId);
-      boundaryWaitRef.current.delete(activeId);
-    }
-    setSendNextId((prev) => prev === next.messageId ? null : prev);
-    setQueuedCount(queue.length);
+    const next = queue[0]!;
+    inFlightQueuedIdRef.current.set(activeId, next.messageId);
+    syncActiveQueueState();
     isDrainingRef.current = true;
 
-    const handleSendError = () => {
-      targetSetMessages((prev) => removeQueuedMessage(prev, next.messageId));
+    const handleSendError = (message = "Failed to send queued message.") => {
+      clearQueueForSession(activeId, targetSetMessages);
       targetSetMessages((prev) => [
         ...prev,
         {
           id: `system-send-error-${Date.now()}`,
           role: "system" as const,
-          content: "Failed to send queued message.",
+          content: message,
           isError: true,
           timestamp: Date.now(),
         },
       ]);
       targetSetIsProcessing(false);
-      clearQueue();
+    };
+
+    const finalizeQueuedSend = () => {
+      const currentQueue = messageQueueRef.current.get(activeId) ?? [];
+      const nextQueue = removeQueuedEntry(currentQueue, next.messageId);
+      if (nextQueue.length > 0) {
+        messageQueueRef.current.set(activeId, nextQueue);
+      } else {
+        messageQueueRef.current.delete(activeId);
+        boundaryWaitRef.current.delete(activeId);
+      }
+      inFlightQueuedIdRef.current.delete(activeId);
+      setSendNextId((prev) => prev === next.messageId ? null : prev);
+      syncActiveQueueState();
+      targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
     };
 
     try {
@@ -180,7 +217,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
         targetSetIsProcessing(true);
         const result = await window.claude.acp.prompt(activeId, next.text, next.images);
         if (result?.error) handleSendError();
-        else targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
+        else finalizeQueuedSend();
       } else if (sessionEngine === "codex") {
         targetSetIsProcessing(true);
         const session = sessionsRef.current.find((s) => s.id === activeId);
@@ -188,18 +225,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
         try {
           codexCollabMode = buildCodexCollabMode(startOptionsRef.current.planMode, session?.model);
         } catch (err) {
-          targetSetMessages((prev) => [
-            ...prev,
-            {
-              id: `system-send-error-${Date.now()}`,
-              role: "system" as const,
-              content: err instanceof Error ? err.message : String(err),
-              isError: true,
-              timestamp: Date.now(),
-            },
-          ]);
-          targetSetIsProcessing(false);
-          clearQueue();
+          handleSendError(err instanceof Error ? err.message : String(err));
           return;
         }
         const result = await window.claude.codex.send(
@@ -210,7 +236,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
           codexCollabMode,
         );
         if (result?.error) handleSendError();
-        else targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
+        else finalizeQueuedSend();
       } else {
         targetSetIsProcessing(true);
         const content = buildSdkContent(next.text, next.images);
@@ -219,7 +245,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
           message: { role: "user", content },
         });
         if (result?.error || result?.ok === false) handleSendError();
-        else targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
+        else finalizeQueuedSend();
       }
     } catch {
       handleSendError();
@@ -232,16 +258,17 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     acp.setMessages,
     claude.setIsProcessing,
     claude.setMessages,
-    clearQueue,
+    clearQueueForSession,
     codex.setIsProcessing,
     codex.setMessages,
     codexEffortRef,
     engine.isProcessing,
+    engine.setMessages,
     liveSessionIdsRef,
     messageQueueRef,
     sessionsRef,
-    setQueuedCount,
     startOptionsRef,
+    syncActiveQueueState,
   ]);
 
   const sendQueuedMessageNext = useCallback(async (messageId: string) => {
@@ -249,16 +276,14 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     if (!activeId || activeId === DRAFT_ID) return;
 
     const queue = messageQueueRef.current.get(activeId) ?? [];
-    const queueIndex = queue.findIndex((entry) => entry.messageId === messageId);
-    if (queueIndex < 0) return;
-
-    if (queueIndex > 0) {
-      const [selected] = queue.splice(queueIndex, 1);
-      queue.unshift(selected);
+    const reorderedQueue = prioritizeQueuedEntry(queue, messageId);
+    if (reorderedQueue === queue && queue[0]?.messageId !== messageId) return;
+    if (reorderedQueue !== queue) {
+      messageQueueRef.current.set(activeId, reorderedQueue);
     }
     setSendNextId(messageId);
-    setQueuedCount(queue.length);
-    reorderQueuedMessagesInUI(queue.map((entry) => entry.messageId));
+    syncActiveQueueState();
+    reorderQueuedMessagesInUI((reorderedQueue !== queue ? reorderedQueue : queue).map((entry) => entry.messageId));
 
     // Boundary-aware behavior:
     // 1) never interrupt while currently streaming assistant text
@@ -288,7 +313,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     messagesRef,
     messageQueueRef,
     reorderQueuedMessagesInUI,
-    setQueuedCount,
+    syncActiveQueueState,
   ]);
 
   useEffect(() => {
@@ -345,16 +370,17 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     if (!activeSessionId || activeSessionId === DRAFT_ID) {
       setQueuedCount(0);
       setSendNextId(null);
+      setInFlightQueuedId(null);
       boundaryWaitRef.current.clear();
       return;
     }
-    setQueuedCount(messageQueueRef.current.get(activeSessionId)?.length ?? 0);
-  }, [activeSessionId, messageQueueRef, setQueuedCount]);
+    syncActiveQueueState();
+  }, [activeSessionId, messageQueueRef, setQueuedCount, syncActiveQueueState]);
 
   useEffect(() => {
     if (engine.isProcessing) return;
     void drainNextQueuedMessage();
   }, [activeSessionId, drainNextQueuedMessage, engine.isProcessing]);
 
-  return { enqueueMessage, clearQueue, sendQueuedMessageNext, sendNextId };
+  return { enqueueMessage, clearQueue, sendQueuedMessageNext, sendNextId, inFlightQueuedId };
 }

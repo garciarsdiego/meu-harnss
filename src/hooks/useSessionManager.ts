@@ -203,7 +203,7 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
   };
 
   // ── Compose sub-hooks ──
-  const { enqueueMessage, clearQueue, sendQueuedMessageNext, sendNextId } = useMessageQueue({ refs, setters, engines, activeSessionId });
+  const { enqueueMessage, clearQueue, sendQueuedMessageNext, sendNextId, inFlightQueuedId } = useMessageQueue({ refs, setters, engines, activeSessionId });
 
   const { saveCurrentSession, seedBackgroundStore, generateSessionTitle } = useSessionPersistence({
     refs,
@@ -337,6 +337,7 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
     send,
     sendQueuedMessageNext,
     sendNextId,
+    inFlightQueuedId,
     seedDevExampleConversation,
     refreshSessions,
     queuedCount,

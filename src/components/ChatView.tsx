@@ -51,9 +51,11 @@ interface ChatViewProps {
   onSendQueuedNow?: (messageId: string) => void;
   /** Message ID explicitly marked as "send next" by the user */
   sendNextId?: string | null;
+  /** Queued message currently being handed off to the engine */
+  inFlightQueuedId?: string | null;
 }
 
-export const ChatView = memo(function ChatView({ messages, isProcessing, showThinking, autoGroupTools, extraBottomPadding, scrollToMessageId, onScrolledToMessage, sessionId, onRevert, onFullRevert, onViewTurnChanges, onScrolledFromTop, onTopScrollProgress, onSendQueuedNow, sendNextId }: ChatViewProps) {
+export const ChatView = memo(function ChatView({ messages, isProcessing, showThinking, autoGroupTools, extraBottomPadding, scrollToMessageId, onScrolledToMessage, sessionId, onRevert, onFullRevert, onViewTurnChanges, onScrolledFromTop, onTopScrollProgress, onSendQueuedNow, sendNextId, inFlightQueuedId }: ChatViewProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const bottomLockedRef = useRef(true);
@@ -603,6 +605,7 @@ export const ChatView = memo(function ChatView({ messages, isProcessing, showThi
             <MessageBubble
               message={msg}
               isSendNextQueued={sendNextId === msg.id}
+              isQueuedInFlight={inFlightQueuedId === msg.id}
               showThinking={showThinking}
               isContinuation={continuationIds.has(msg.id)}
               onRevert={onRevert}
