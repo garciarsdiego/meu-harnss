@@ -4,6 +4,7 @@ import type { CollaborationMode } from "../../types/codex-protocol/Collaboration
 import { imageAttachmentsToCodexInputs } from "../../lib/codex-adapter";
 import { suppressNextSessionCompletion } from "../../lib/notification-utils";
 import { buildSdkContent } from "../../lib/protocol";
+import { finalizeQueuedMessage } from "./message-queue-utils";
 import { buildCodexCollabMode, DRAFT_ID } from "./types";
 import type { SharedSessionRefs, SharedSessionSetters, EngineHooks, QueuedMessage } from "./types";
 
@@ -158,19 +159,8 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     setQueuedCount(queue.length);
     isDrainingRef.current = true;
 
-    // Clear isQueued and move the just-sent user message to the bottom of the
-    // non-queued section so it appears where it was actually sent.
-    targetSetMessages((prev) => {
-      const index = prev.findIndex((m) => m.id === next.messageId);
-      if (index < 0) return prev;
-      const sentMessage = { ...prev[index], isQueued: false };
-      const rest = prev.filter((m) => m.id !== next.messageId);
-      const nonQueued = rest.filter((m) => !m.isQueued);
-      const queued = rest.filter((m) => m.isQueued);
-      return [...nonQueued, sentMessage, ...queued];
-    });
-
     const handleSendError = () => {
+      targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
       targetSetMessages((prev) => [
         ...prev,
         {
@@ -190,6 +180,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
         targetSetIsProcessing(true);
         const result = await window.claude.acp.prompt(activeId, next.text, next.images);
         if (result?.error) handleSendError();
+        else targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
       } else if (sessionEngine === "codex") {
         targetSetIsProcessing(true);
         const session = sessionsRef.current.find((s) => s.id === activeId);
@@ -219,6 +210,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
           codexCollabMode,
         );
         if (result?.error) handleSendError();
+        else targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
       } else {
         targetSetIsProcessing(true);
         const content = buildSdkContent(next.text, next.images);
@@ -227,6 +219,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
           message: { role: "user", content },
         });
         if (result?.error || result?.ok === false) handleSendError();
+        else targetSetMessages((prev) => finalizeQueuedMessage(prev, next.messageId));
       }
     } catch {
       handleSendError();
