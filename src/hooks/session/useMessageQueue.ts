@@ -73,8 +73,9 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     return created;
   }, [messageQueueRef]);
 
-  const syncActiveQueueState = useCallback(() => {
+  const syncActiveQueueState = useCallback((expectedSessionId?: string | null) => {
     const sessionId = activeSessionIdRef.current;
+    if (expectedSessionId !== undefined && sessionId !== expectedSessionId) return;
     if (!sessionId || sessionId === DRAFT_ID) {
       setQueuedCount(0);
       setInFlightQueuedId(null);
@@ -82,7 +83,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     }
     setQueuedCount(messageQueueRef.current.get(sessionId)?.length ?? 0);
     setInFlightQueuedId(inFlightQueuedIdRef.current.get(sessionId) ?? null);
-  }, [activeSessionIdRef, messageQueueRef, setQueuedCount]);
+  }, [activeSessionIdRef, inFlightQueuedIdRef, messageQueueRef, setQueuedCount]);
 
   /** Add a message to the queue and show it in chat immediately with isQueued styling */
   const enqueueMessage = useCallback((text: string, images?: ImageAttachment[], displayText?: string) => {
@@ -92,7 +93,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     const msgId = `user-queued-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const queue = getQueueForSession(activeId);
     queue.push({ text, images, displayText, messageId: msgId });
-    syncActiveQueueState();
+    syncActiveQueueState(sessionId);
     engine.setMessages((prev) => [
       ...prev,
       {
@@ -145,11 +146,11 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
     if (activeSessionIdRef.current === sessionId) {
       setSendNextId(null);
     }
-    syncActiveQueueState();
+    syncActiveQueueState(activeId);
     if (queuedIds.size > 0) {
       targetSetMessages((prev) => prev.filter((message) => !queuedIds.has(message.id)));
     }
-  }, [activeSessionIdRef, engine.setMessages, messageQueueRef, syncActiveQueueState]);
+  }, [activeSessionIdRef, messageQueueRef, syncActiveQueueState]);
 
   /** Clear the entire queue and remove queued messages from chat */
   const clearQueue = useCallback(() => {
@@ -289,13 +290,14 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
 
     const queue = messageQueueRef.current.get(activeId) ?? [];
     const reorderedQueue = prioritizeQueuedEntry(queue, messageId);
-    if (reorderedQueue === queue && queue[0]?.messageId !== messageId) return;
+    const messageExists = queue.some((entry) => entry.messageId === messageId);
+    if (!messageExists) return;
     if (reorderedQueue !== queue) {
       messageQueueRef.current.set(activeId, reorderedQueue);
     }
     setSendNextId(messageId);
-    syncActiveQueueState();
-    reorderQueuedMessagesInUI((reorderedQueue !== queue ? reorderedQueue : queue).map((entry) => entry.messageId));
+    syncActiveQueueState(activeId);
+    reorderQueuedMessagesInUI(reorderedQueue.map((entry) => entry.messageId));
 
     // Boundary-aware behavior:
     // 1) never interrupt while currently streaming assistant text
@@ -387,7 +389,7 @@ export function useMessageQueue({ refs, setters, engines, activeSessionId }: Use
       return;
     }
     syncActiveQueueState();
-  }, [activeSessionId, messageQueueRef, setQueuedCount, syncActiveQueueState]);
+  }, [activeSessionId, messageQueueRef, syncActiveQueueState]);
 
   useEffect(() => {
     if (engine.isProcessing) return;
