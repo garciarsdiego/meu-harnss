@@ -176,10 +176,15 @@ mcpIpc.register();
 settingsIpc.register();
 
 // Listen for analytics settings changes and reinitialize PostHog
+let lastAnalyticsEnabled: boolean | undefined;
 onSettingsChanged((settings) => {
-  // Reinitialize PostHog when analytics settings change
-  if ("analyticsEnabled" in settings) {
-    reinitPostHog();
+  if (lastAnalyticsEnabled !== undefined && settings.analyticsEnabled !== lastAnalyticsEnabled) {
+    lastAnalyticsEnabled = settings.analyticsEnabled;
+    reinitPostHog().catch((err) => {
+      log("POSTHOG", `Failed to reinitialize PostHog: ${(err as Error).message}`);
+    });
+  } else {
+    lastAnalyticsEnabled = settings.analyticsEnabled;
   }
 });
 

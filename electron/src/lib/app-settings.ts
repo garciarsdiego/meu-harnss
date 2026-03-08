@@ -54,6 +54,8 @@ export interface AppSettings {
   analyticsEnabled: boolean;
   /** Anonymous user ID for analytics (auto-generated) */
   analyticsUserId?: string;
+  /** Last date (YYYY-MM-DD) when daily_active_user was sent, to deduplicate across restarts */
+  analyticsLastDailyActiveDate?: string;
 }
 
 const NOTIFICATION_DEFAULTS: NotificationSettings = {

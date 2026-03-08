@@ -23,7 +23,7 @@ export const AnalyticsSettings = memo(function AnalyticsSettings({
   useEffect(() => {
     if (appSettings) {
       setAnalyticsEnabled(appSettings.analyticsEnabled ?? true);
-      setUserId((appSettings as any).analyticsUserId || null);
+      setUserId(appSettings.analyticsUserId ?? null);
     }
   }, [appSettings]);
 

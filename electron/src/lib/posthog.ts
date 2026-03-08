@@ -13,10 +13,11 @@
 import { randomUUID } from "crypto";
 import { app } from "electron";
 import { getAppSettings, setAppSettings } from "./app-settings";
+import { log } from "./logger";
 
-// Lazy-loaded PostHog client (ESM package)
-let PostHog: typeof import("posthog-node").default | null = null;
-let client: InstanceType<typeof import("posthog-node").default> | null = null;
+// Lazy-loaded PostHog client
+let PostHogCtor: typeof import("posthog-node").PostHog | null = null;
+let client: import("posthog-node").PostHog | null = null;
 let userId: string | null = null;
 let lastDailyActiveCheck: string | null = null;
 
@@ -36,24 +37,27 @@ export async function initPostHog(): Promise<void> {
   userId = generateUserId();
 
   try {
-    // Check if API key is configured
-    const apiKey = process.env.POSTHOG_API_KEY;
-    if (!apiKey || apiKey === "phc_placeholder_key_replace_with_real_key") {
-      console.warn("PostHog API key not configured - analytics will be disabled");
+    // PostHog project API keys are public (client-side) — safe to embed in source.
+    // Override via POSTHOG_API_KEY env var if needed (e.g. for a fork's own project).
+    const apiKey = process.env.POSTHOG_API_KEY || "phc_lOKFRov0SWy2R71BNJ2t978tmNYc3ND7WwueOteV5vw";
+    if (!apiKey) {
+      log("POSTHOG", "API key not configured — analytics disabled");
       return;
     }
 
-    // Lazy-load posthog-node (ESM package)
+    // Lazy-load posthog-node
     const posthogModule = await import("posthog-node");
-    PostHog = posthogModule.default;
+    PostHogCtor = posthogModule.PostHog;
 
     // Initialize client with public PostHog project
-    client = new PostHog(apiKey, {
+    client = new PostHogCtor(apiKey, {
       host: "https://us.i.posthog.com",
       // Flush events every 10 seconds or 20 events, whichever comes first
       flushAt: 20,
       flushInterval: 10000,
     });
+
+    log("POSTHOG", `Initialized (userId=${userId})`);
 
     // Track app start event
     await captureEvent("app_started", {
@@ -66,7 +70,7 @@ export async function initPostHog(): Promise<void> {
     await trackDailyActive();
   } catch (err) {
     // Non-fatal - analytics is optional
-    console.warn("Failed to initialize PostHog:", err);
+    log("POSTHOG", `Failed to initialize: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -93,16 +97,20 @@ function generateUserId(): string {
 
 /**
  * Track daily active user event (once per day).
+ * Persists the last-sent date to settings to deduplicate across app restarts.
  */
 async function trackDailyActive(): Promise<void> {
   const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const settings = getAppSettings();
 
-  // Skip if already tracked today
-  if (lastDailyActiveCheck === today) {
+  // Skip if already tracked today (check both in-memory and persisted)
+  if (lastDailyActiveCheck === today || settings.analyticsLastDailyActiveDate === today) {
+    lastDailyActiveCheck = today;
     return;
   }
 
   lastDailyActiveCheck = today;
+  setAppSettings({ analyticsLastDailyActiveDate: today });
 
   await captureEvent("daily_active_user", {
     date: today,
@@ -130,7 +138,7 @@ export async function captureEvent(
     });
   } catch (err) {
     // Non-fatal - analytics should never break the app
-    console.warn("Failed to capture PostHog event:", err);
+    log("POSTHOG", `Failed to capture event: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -148,7 +156,7 @@ export async function identifyUser(
       properties,
     });
   } catch (err) {
-    console.warn("Failed to identify PostHog user:", err);
+    log("POSTHOG", `Failed to identify user: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -163,7 +171,7 @@ export async function shutdownPostHog(): Promise<void> {
     await client.shutdown();
     client = null;
   } catch (err) {
-    console.warn("Failed to shutdown PostHog:", err);
+    log("POSTHOG", `Failed to shutdown: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
