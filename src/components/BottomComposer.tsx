@@ -15,6 +15,8 @@ export function BottomComposer({
   onRespondPermission,
   ...inputBarProps
 }: BottomComposerProps) {
+  const hasPendingPermission = !!pendingPermission;
+
   return (
     <>
       {pendingPermission ? (
@@ -24,7 +26,12 @@ export function BottomComposer({
           onRespond={onRespondPermission}
         />
       ) : null}
-      <InputBar {...inputBarProps} />
+      <div
+        aria-hidden={hasPendingPermission}
+        inert={hasPendingPermission || undefined}
+      >
+        <InputBar {...inputBarProps} />
+      </div>
     </>
   );
 }

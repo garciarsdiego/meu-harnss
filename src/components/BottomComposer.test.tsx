@@ -41,6 +41,7 @@ describe("BottomComposer", () => {
   it("keeps the input bar mounted when there is no pending permission", () => {
     const html = renderToStaticMarkup(<BottomComposer {...createProps()} />);
 
+    expect(html).toContain("aria-hidden=\"false\"");
     expect(html).toContain("data-testid=\"input-bar\"");
     expect(html).not.toContain("data-testid=\"permission-prompt\"");
   });
@@ -61,6 +62,8 @@ describe("BottomComposer", () => {
 
     expect(html).toContain("data-testid=\"permission-prompt\"");
     expect(html).toContain("req-1");
+    expect(html).toContain("aria-hidden=\"true\"");
+    expect(html).toContain("inert=\"\"");
     expect(html).toContain("data-testid=\"input-bar\"");
   });
 });
