@@ -677,9 +677,14 @@ function hasMeaningfulText(text: string): boolean {
 }
 
 /** Extract full text + mention paths from a contentEditable element */
-function extractEditableContent(el: HTMLElement): { text: string; mentionPaths: string[] } {
+function extractEditableContent(el: HTMLElement): {
+  text: string;
+  mentionPaths: string[];
+  deepMentionPaths: Set<string>;
+} {
   let text = "";
   const mentionPaths: string[] = [];
+  const deepMentionPaths = new Set<string>();
   const BLOCK_TAGS = new Set([
     "DIV",
     "P",
@@ -700,8 +705,12 @@ function extractEditableContent(el: HTMLElement): { text: string; mentionPaths: 
     } else if (node instanceof HTMLElement) {
       const mentionPath = node.dataset.mentionPath;
       if (mentionPath) {
-        text += `@${mentionPath}`;
+        const isDeep = node.dataset.mentionDeep === "true";
+        text += `@${isDeep ? "#" : ""}${mentionPath}`;
         mentionPaths.push(mentionPath);
+        if (isDeep) {
+          deepMentionPaths.add(mentionPath);
+        }
       } else if (node.tagName === "BR") {
         text += "\n";
       } else {
@@ -718,6 +727,7 @@ function extractEditableContent(el: HTMLElement): { text: string; mentionPaths: 
   return {
     text: text.replace(/\r\n/g, "\n").replace(/\u00a0/g, " "),
     mentionPaths: [...new Set(mentionPaths)],
+    deepMentionPaths,
   };
 }
 
@@ -1021,6 +1031,11 @@ export const InputBar = memo(function InputBar({
       range.setStart(node, mentionStartOffset.current);
       const curRange = sel.getRangeAt(0);
       range.setEnd(curRange.startContainer, curRange.startOffset);
+
+      // Check if @# was used (deep folder mode)
+      const deletedText = range.toString();
+      const isDeepMode = deletedText.startsWith("@#");
+
       range.deleteContents();
 
       // Create chip element
@@ -1030,7 +1045,13 @@ export const InputBar = memo(function InputBar({
         "mention-chip inline-flex items-center gap-1 rounded-md bg-accent/60 px-1.5 py-0.5 text-xs text-accent-foreground font-mono align-baseline cursor-default select-none";
       chip.setAttribute("data-mention-path", entry.path);
       chip.setAttribute("data-mention-dir", String(entry.isDir));
-      chip.innerHTML = `${entry.isDir ? FOLDER_ICON_SVG : FILE_ICON_SVG}<span>${entry.path}</span>`;
+      if (isDeepMode) {
+        chip.setAttribute("data-mention-deep", "true");
+        // Add visual distinction for deep mode with a different background
+        chip.className =
+          "mention-chip inline-flex items-center gap-1 rounded-md bg-primary/60 px-1.5 py-0.5 text-xs text-primary-foreground font-mono align-baseline cursor-default select-none";
+      }
+      chip.innerHTML = `${entry.isDir ? FOLDER_ICON_SVG : FILE_ICON_SVG}<span>${isDeepMode && entry.isDir ? "#" : ""}${entry.path}</span>`;
 
       // Insert chip at cursor
       range.insertNode(chip);
@@ -1057,7 +1078,7 @@ export const InputBar = memo(function InputBar({
     const el = editableRef.current;
     if (!el) return;
 
-    const { text: fullText, mentionPaths } = extractEditableContent(el);
+    const { text: fullText, mentionPaths, deepMentionPaths } = extractEditableContent(el);
     const trimmed = fullText.trim();
     const hasGrabs = grabbedElements && grabbedElements.length > 0;
     if (isAwaitingAcpOptions || (!trimmed && attachments.length === 0 && !hasGrabs) || isSending) return;
@@ -1080,7 +1101,7 @@ export const InputBar = memo(function InputBar({
     if (mentionPaths.length > 0 && projectPath) {
       setIsSending(true);
       try {
-        const fileResults = await window.claude.files.readMultiple(projectPath, mentionPaths);
+        const fileResults = await window.claude.files.readMultiple(projectPath, mentionPaths, deepMentionPaths);
 
         for (const result of fileResults) {
           if (result.error) {
@@ -1266,12 +1287,12 @@ export const InputBar = memo(function InputBar({
     const offset = range.startOffset;
     const scanStart = Math.max(0, offset - 256);
     const textBefore = nodeText.slice(scanStart, offset);
-    const atMatch = textBefore.match(/(^|[\s])@([^\s]*)$/);
+    const atMatch = textBefore.match(/(^|[\s])@(#?)([^\s]*)$/);
 
     if (atMatch && projectPath) {
       mentionStartNode.current = node;
       mentionStartOffset.current = scanStart + textBefore.lastIndexOf("@");
-      setMentionQuery(atMatch[2]);
+      setMentionQuery(atMatch[3]);
       setShowMentions(true);
       setMentionIndex(0);
     } else {

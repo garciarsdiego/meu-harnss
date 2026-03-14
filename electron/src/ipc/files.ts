@@ -328,8 +328,10 @@ export function register(getMainWindow: () => BrowserWindow | null): void {
     }
   });
 
-  ipcMain.handle("files:read-multiple", async (_event, { cwd, paths }: { cwd: string; paths: string[] }) => {
+  ipcMain.handle("files:read-multiple", async (_event, { cwd, paths, deepPaths }: { cwd: string; paths: string[]; deepPaths?: string[] }) => {
     const results: Array<{ path: string; content?: string; error?: string; isDir?: boolean; tree?: string }> = [];
+    const deepPathsSet = new Set(deepPaths ?? []);
+
     for (const relPath of paths) {
       try {
         const absPath = path.resolve(cwd, relPath);
@@ -343,7 +345,33 @@ export function register(getMainWindow: () => BrowserWindow | null): void {
           const dirPrefix = relPath.endsWith("/") ? relPath : relPath + "/";
           const matchingFiles = allFiles.filter((f) => f.startsWith(dirPrefix));
           const tree = buildFolderTree(dirPrefix, matchingFiles);
-          results.push({ path: relPath, isDir: true, tree });
+
+          // If this is a deep folder (@#), also include all file contents
+          if (deepPathsSet.has(relPath)) {
+            // Add tree first
+            results.push({ path: relPath, isDir: true, tree });
+
+            // Then add all files in the folder with their content
+            for (const file of matchingFiles) {
+              const fileAbsPath = path.resolve(cwd, file);
+              try {
+                const fileStat = fs.statSync(fileAbsPath);
+                if (!fileStat.isDirectory()) {
+                  if (fileStat.size > 500_000) {
+                    results.push({ path: file, error: "File too large" });
+                    continue;
+                  }
+                  const content = fs.readFileSync(fileAbsPath, "utf-8");
+                  results.push({ path: file, content });
+                }
+              } catch (fileErr) {
+                results.push({ path: file, error: fileErr instanceof Error ? fileErr.message : String(fileErr) });
+              }
+            }
+          } else {
+            // Regular folder mention - just the tree
+            results.push({ path: relPath, isDir: true, tree });
+          }
         } else {
           if (stat.size > 500_000) {
             results.push({ path: relPath, error: "File too large" });

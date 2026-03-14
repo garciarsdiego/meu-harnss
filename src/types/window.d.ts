@@ -167,6 +167,7 @@ declare global {
         readMultiple: (
           cwd: string,
           paths: string[],
+          deepPaths?: Set<string>,
         ) => Promise<
           Array<
             | { path: string; content: string; isDir?: false; error?: undefined }
