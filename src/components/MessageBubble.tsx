@@ -327,6 +327,11 @@ export const MessageBubble = memo(function MessageBubble({
   // messages; for truly long chats, proper virtualization should be used instead.
   const hasMermaidContent = containsMermaidFence(message.content);
 
+  const hasRenderableAssistantContent = !!message.content || (showThinking && !!message.thinking);
+  if (!hasRenderableAssistantContent) {
+    return null;
+  }
+
   return (
     <div className={`flex justify-start px-4 ${isContinuation ? "py-0.5" : "py-1.5"}`}>
       <Tooltip>
