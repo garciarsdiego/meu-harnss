@@ -732,6 +732,45 @@ function extractEditableContent(el: HTMLElement): {
   };
 }
 
+if (import.meta.vitest) {
+  const { it, describe, expect } = import.meta.vitest;
+
+  describe("extractEditableContent", () => {
+    it("extracts shallow mention paths from data attributes", () => {
+      const container = document.createElement("div");
+      const mention = document.createElement("span");
+      mention.dataset.mentionPath = "foo/bar";
+      container.appendChild(mention);
+
+      const result = extractEditableContent(container);
+
+      expect(result.text).toBe("@foo/bar");
+      expect(result.mentionPaths).toEqual(["foo/bar"]);
+      expect(result.deepMentionPaths.size).toBe(0);
+    });
+
+    it("extracts deep mention paths and formats text with @# prefix", () => {
+      const container = document.createElement("div");
+      const block = document.createElement("div");
+      const deepMention = document.createElement("span");
+
+      deepMention.dataset.mentionPath = "space/123";
+      deepMention.dataset.mentionDeep = "true";
+
+      block.appendChild(document.createTextNode("See "));
+      block.appendChild(deepMention);
+      container.appendChild(block);
+
+      const result = extractEditableContent(container);
+
+      // Block elements append a trailing newline.
+      expect(result.text).toBe("See @#space/123\n");
+      expect(result.mentionPaths).toEqual(["space/123"]);
+      expect(result.deepMentionPaths.has("space/123")).toBe(true);
+    });
+  });
+}
+
 export const InputBar = memo(function InputBar({
   onSend,
   onClear,
