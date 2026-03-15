@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -784,6 +785,16 @@ export const InputBar = memo(function InputBar({
   const [isDragging, setIsDragging] = useState(false);
   const [editingAttachment, setEditingAttachment] = useState<ImageAttachment | null>(null);
 
+  // ── Deep folder confirmation ──
+  const [showDeepFolderConfirm, setShowDeepFolderConfirm] = useState(false);
+  const [deepFolderInfo, setDeepFolderInfo] = useState<{
+    fileCount: number;
+    totalSize: number;
+    estimatedTokens: number;
+    warnings: string[];
+  } | null>(null);
+  const pendingSendRef = useRef<(() => Promise<void>) | null>(null);
+
   // ── Voice dictation ──
   const speech = useSpeechRecognition({
     onResult: (text) => insertTextAtCursor(editableRef.current, text),
@@ -1083,11 +1094,6 @@ export const InputBar = memo(function InputBar({
     const hasGrabs = grabbedElements && grabbedElements.length > 0;
     if (isAwaitingAcpOptions || (!trimmed && attachments.length === 0 && !hasGrabs) || isSending) return;
 
-    const currentImages = attachments.length > 0 ? [...attachments] : undefined;
-    const contextParts: string[] = [];
-    const grabbedElementDisplayTokens: string[] = [];
-    let hasContext = false;
-
     if (isClearCommandText(trimmed)) {
       try {
         await onClear?.();
@@ -1096,6 +1102,45 @@ export const InputBar = memo(function InputBar({
       }
       return;
     }
+
+    // Check if we need to warn about deep folder size
+    if (deepMentionPaths.size > 0 && projectPath) {
+      try {
+        const sizeInfo = await window.claude.files.calculateDeepSize(projectPath, Array.from(deepMentionPaths));
+
+        // Warn if estimated tokens > 50k (half the limit)
+        if (sizeInfo.estimatedTokens > 50_000) {
+          setDeepFolderInfo(sizeInfo);
+          setShowDeepFolderConfirm(true);
+
+          // Store the send logic to be called after confirmation
+          pendingSendRef.current = async () => {
+            await performSend(el, fullText, mentionPaths, deepMentionPaths, hasGrabs);
+          };
+          return;
+        }
+      } catch (err) {
+        console.error("Failed to calculate deep folder size:", err);
+        // Continue with send anyway if size check fails
+      }
+    }
+
+    // No warning needed, send immediately
+    await performSend(el, fullText, mentionPaths, deepMentionPaths, hasGrabs);
+  }, [attachments, isAwaitingAcpOptions, isSending, projectPath, onClear, grabbedElements]);
+
+  const performSend = useCallback(async (
+    el: HTMLDivElement,
+    fullText: string,
+    mentionPaths: string[],
+    deepMentionPaths: Set<string>,
+    hasGrabs: boolean,
+  ) => {
+    const trimmed = fullText.trim();
+    const currentImages = attachments.length > 0 ? [...attachments] : undefined;
+    const contextParts: string[] = [];
+    const grabbedElementDisplayTokens: string[] = [];
+    let hasContext = false;
 
     // File mentions → <file>/<folder> context blocks
     if (mentionPaths.length > 0 && projectPath) {
@@ -1119,7 +1164,7 @@ export const InputBar = memo(function InputBar({
     }
 
     // Grabbed elements → <element> context blocks
-    if (hasGrabs) {
+    if (hasGrabs && grabbedElements) {
       // Escape special chars for XML attribute values (webpage content can contain anything)
       const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const compact = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -1167,7 +1212,16 @@ export const InputBar = memo(function InputBar({
     }
 
     clearComposer(el);
-  }, [attachments, isAwaitingAcpOptions, isSending, projectPath, onSend, onClear, clearComposer, grabbedElements]);
+  }, [attachments, projectPath, onSend, clearComposer, grabbedElements]);
+
+  const handleDeepFolderConfirm = useCallback(async () => {
+    if (pendingSendRef.current) {
+      await pendingSendRef.current();
+      pendingSendRef.current = null;
+    }
+    setShowDeepFolderConfirm(false);
+    setDeepFolderInfo(null);
+  }, []);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     // Slash command picker keyboard navigation
@@ -1850,6 +1904,45 @@ export const InputBar = memo(function InputBar({
           </div>
         </div>
       </div>
+
+      {/* Deep folder confirmation dialog */}
+      <ConfirmDialog
+        open={showDeepFolderConfirm}
+        onOpenChange={setShowDeepFolderConfirm}
+        onConfirm={handleDeepFolderConfirm}
+        title="Large Context Warning"
+        confirmLabel="Send Anyway"
+        cancelLabel="Cancel"
+        confirmVariant="default"
+        description={
+          deepFolderInfo && (
+            <div className="space-y-2 text-sm">
+              <p>
+                This deep folder includes <strong>{deepFolderInfo.fileCount} files</strong> totaling{" "}
+                <strong>{Math.round(deepFolderInfo.totalSize / 1024)}KB</strong> (~
+                <strong>{deepFolderInfo.estimatedTokens.toLocaleString()} tokens</strong>).
+              </p>
+              <p className="text-muted-foreground">
+                Sending this much content will consume a significant portion of the context window and may impact
+                response quality.
+              </p>
+              {deepFolderInfo.warnings.length > 0 && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  <p className="font-medium">Note: Some files will be skipped:</p>
+                  <ul className="ms-4 list-disc">
+                    {deepFolderInfo.warnings.slice(0, 3).map((warning, i) => (
+                      <li key={i}>{warning}</li>
+                    ))}
+                    {deepFolderInfo.warnings.length > 3 && (
+                      <li>... and {deepFolderInfo.warnings.length - 3} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )
+        }
+      />
     </div>
   );
 });

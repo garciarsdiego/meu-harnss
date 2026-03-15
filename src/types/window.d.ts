@@ -164,6 +164,15 @@ declare global {
         listAll: (cwd: string) => Promise<{ files: string[]; dirs: string[] }>;
         watch: (cwd: string) => Promise<{ ok?: boolean; error?: string }>;
         unwatch: (cwd: string) => Promise<{ ok?: boolean; error?: string }>;
+        calculateDeepSize: (
+          cwd: string,
+          paths: string[],
+        ) => Promise<{
+          totalSize: number;
+          fileCount: number;
+          estimatedTokens: number;
+          warnings: string[];
+        }>;
         readMultiple: (
           cwd: string,
           paths: string[],

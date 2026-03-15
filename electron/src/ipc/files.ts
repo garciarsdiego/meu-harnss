@@ -328,9 +328,58 @@ export function register(getMainWindow: () => BrowserWindow | null): void {
     }
   });
 
+  ipcMain.handle("files:calculate-deep-size", async (_event, { cwd, paths }: { cwd: string; paths: string[] }) => {
+    let totalSize = 0;
+    let fileCount = 0;
+    const warnings: string[] = [];
+
+    for (const relPath of paths) {
+      try {
+        const absPath = path.resolve(cwd, relPath);
+        if (!absPath.startsWith(path.resolve(cwd) + path.sep) && absPath !== path.resolve(cwd)) {
+          continue;
+        }
+        const stat = fs.statSync(absPath);
+        if (stat.isDirectory()) {
+          const allFiles = await listProjectFiles(cwd);
+          const dirPrefix = relPath.endsWith("/") ? relPath : relPath + "/";
+          const matchingFiles = allFiles.filter((f) => f.startsWith(dirPrefix));
+
+          for (const file of matchingFiles) {
+            const fileAbsPath = path.resolve(cwd, file);
+            try {
+              const fileStat = fs.statSync(fileAbsPath);
+              if (!fileStat.isDirectory() && fileStat.size <= 500_000) {
+                totalSize += fileStat.size;
+                fileCount++;
+              } else if (fileStat.size > 500_000) {
+                warnings.push(`${file} (too large, will be skipped)`);
+              }
+            } catch {
+              // Skip files that can't be statted
+            }
+          }
+        }
+      } catch {
+        // Skip paths that can't be accessed
+      }
+    }
+
+    return {
+      totalSize,
+      fileCount,
+      estimatedTokens: Math.round(totalSize / 4), // 4 chars per token average
+      warnings,
+    };
+  });
+
   ipcMain.handle("files:read-multiple", async (_event, { cwd, paths, deepPaths }: { cwd: string; paths: string[]; deepPaths?: string[] }) => {
     const results: Array<{ path: string; content?: string; error?: string; isDir?: boolean; tree?: string }> = [];
     const deepPathsSet = new Set(deepPaths ?? []);
+
+    // Token limit: ~100k tokens = ~400KB of text (4 chars/token average)
+    const MAX_TOTAL_SIZE = 400_000; // bytes
+    let totalContentSize = 0;
 
     for (const relPath of paths) {
       try {
@@ -351,7 +400,9 @@ export function register(getMainWindow: () => BrowserWindow | null): void {
             // Add tree first
             results.push({ path: relPath, isDir: true, tree });
 
-            // Then add all files in the folder with their content
+            // Calculate total size first to check limit
+            let folderContentSize = 0;
+            const filesToRead: string[] = [];
             for (const file of matchingFiles) {
               const fileAbsPath = path.resolve(cwd, file);
               const projectRoot = path.resolve(cwd);
@@ -361,14 +412,36 @@ export function register(getMainWindow: () => BrowserWindow | null): void {
               }
               try {
                 const fileStat = fs.statSync(fileAbsPath);
-                if (!fileStat.isDirectory()) {
-                  if (fileStat.size > 500_000) {
-                    results.push({ path: file, error: "File too large" });
-                    continue;
-                  }
-                  const content = fs.readFileSync(fileAbsPath, "utf-8");
-                  results.push({ path: file, content });
+                if (!fileStat.isDirectory() && fileStat.size <= 500_000) {
+                  folderContentSize += fileStat.size;
+                  filesToRead.push(file);
                 }
+              } catch {
+                // Skip files that can't be statted
+              }
+            }
+
+            // Check if adding this folder would exceed the global limit
+            if (totalContentSize + folderContentSize > MAX_TOTAL_SIZE) {
+              results.push({
+                path: relPath,
+                error: `Deep folder content too large: ${Math.round(folderContentSize / 1024)}KB (would exceed ${Math.round(MAX_TOTAL_SIZE / 1024)}KB limit). Try a smaller folder or use regular @mention for tree only.`,
+              });
+              continue;
+            }
+
+            // Read all files in the folder
+            for (const file of filesToRead) {
+              const fileAbsPath = path.resolve(cwd, file);
+              try {
+                const fileStat = fs.statSync(fileAbsPath);
+                if (fileStat.size > 500_000) {
+                  results.push({ path: file, error: "File too large" });
+                  continue;
+                }
+                const content = fs.readFileSync(fileAbsPath, "utf-8");
+                results.push({ path: file, content });
+                totalContentSize += content.length;
               } catch (fileErr) {
                 results.push({ path: file, error: fileErr instanceof Error ? fileErr.message : String(fileErr) });
               }
@@ -384,6 +457,7 @@ export function register(getMainWindow: () => BrowserWindow | null): void {
           }
           const content = fs.readFileSync(absPath, "utf-8");
           results.push({ path: relPath, content });
+          totalContentSize += content.length;
         }
       } catch (err) {
         results.push({ path: relPath, error: err instanceof Error ? err.message : String(err) });

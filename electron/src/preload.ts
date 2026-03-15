@@ -125,6 +125,7 @@ contextBridge.exposeInMainWorld("claude", {
     listAll: (cwd: string) => ipcRenderer.invoke("files:list-all", cwd),
     watch: (cwd: string) => ipcRenderer.invoke("files:watch", cwd),
     unwatch: (cwd: string) => ipcRenderer.invoke("files:unwatch", cwd),
+    calculateDeepSize: (cwd: string, paths: string[]) => ipcRenderer.invoke("files:calculate-deep-size", { cwd, paths }),
     readMultiple: (cwd: string, paths: string[], deepPaths?: Set<string>) => ipcRenderer.invoke("files:read-multiple", { cwd, paths, deepPaths: deepPaths ? Array.from(deepPaths) : undefined }),
     onChanged: (callback: (data: unknown) => void) => {
       const listener = (_event: IpcRendererEvent, data: unknown) => callback(data);
