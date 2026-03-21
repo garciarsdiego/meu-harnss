@@ -566,6 +566,7 @@ export function useDraftMaterialization({
       liveSessionIdsRef.current.add(sessionId);
 
       const now = Date.now();
+      const currentBranch = refs.currentBranchRef.current;
       const newSession: ChatSession = {
         id: sessionId,
         projectId: project.id,
@@ -577,6 +578,7 @@ export function useDraftMaterialization({
         totalCost: 0,
         isActive: true,
         titleGenerating: true,
+        ...(currentBranch ? { branch: currentBranch } : {}),
         engine: draftEngine,
         ...(draftEngine === "acp" && options.agentId ? {
           agentId: options.agentId,

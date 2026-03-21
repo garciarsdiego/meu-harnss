@@ -12,6 +12,8 @@ interface AppearanceSettingsProps {
   onThemeChange: (t: ThemeOption) => void;
   islandLayout: boolean;
   onIslandLayoutChange: (enabled: boolean) => void;
+  islandShine: boolean;
+  onIslandShineChange: (enabled: boolean) => void;
   autoGroupTools: boolean;
   onAutoGroupToolsChange: (enabled: boolean) => void;
   avoidGroupingEdits: boolean;
@@ -35,6 +37,8 @@ export const AppearanceSettings = memo(function AppearanceSettings({
   onThemeChange,
   islandLayout,
   onIslandLayoutChange,
+  islandShine,
+  onIslandShineChange,
   autoGroupTools,
   onAutoGroupToolsChange,
   avoidGroupingEdits,
@@ -237,6 +241,17 @@ export const AppearanceSettings = memo(function AppearanceSettings({
               <Switch
                 checked={coloredSidebarIcons}
                 onCheckedChange={onColoredSidebarIconsChange}
+              />
+            </SettingRow>
+
+            <SettingRow
+              label="Island border shine"
+              description="Show a subtle diagonal reflection on island panel borders. Only visible in island layout mode."
+            >
+              <Switch
+                checked={islandShine}
+                onCheckedChange={onIslandShineChange}
+                disabled={!islandLayout}
               />
             </SettingRow>
           </div>

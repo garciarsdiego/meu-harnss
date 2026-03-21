@@ -77,6 +77,8 @@ export interface SharedSessionRefs {
   switchSessionRef: React.MutableRefObject<((id: string) => Promise<void>) | undefined>;
   onSpaceChangeRef: React.MutableRefObject<((spaceId: string) => void) | undefined>;
   acpPermissionBehaviorRef: React.MutableRefObject<AcpPermissionBehavior>;
+  /** Current git branch for the active project — set by the orchestrator. */
+  currentBranchRef: React.MutableRefObject<string | undefined>;
 }
 
 /** State setters from the orchestrator that sub-hooks need */

@@ -139,6 +139,7 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
   const codexEffortManualOverrideRef = useRef(false);
   const acpPermissionBehaviorRef = useRef<AcpPermissionBehavior>(acpPermissionBehavior);
   acpPermissionBehaviorRef.current = acpPermissionBehavior;
+  const currentBranchRef = useRef<string | undefined>(undefined);
   // Stable ref to switchSession so toast callbacks don't capture stale closures
   const switchSessionRef = useRef<((id: string) => Promise<void>) | undefined>(undefined);
   // Stable ref for space switching — avoids adding onSpaceChange as a useCallback dependency
@@ -203,6 +204,7 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
     switchSessionRef,
     onSpaceChangeRef,
     acpPermissionBehaviorRef,
+    currentBranchRef,
   };
 
   const setters: SharedSessionSetters = {
@@ -356,10 +358,16 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
   const isDraft = activeSessionId === DRAFT_ID;
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
 
+  const setCurrentBranch = useCallback((branch: string | undefined) => {
+    currentBranchRef.current = branch;
+  }, []);
+
   // ── Return (identical interface to original) ──
   return {
     sessions,
+    setSessions,
     activeSessionId,
+    setCurrentBranch,
     activeSession,
     isDraft,
     draftProjectId,

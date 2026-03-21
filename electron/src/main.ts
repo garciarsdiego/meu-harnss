@@ -33,6 +33,7 @@ import { terminals } from "./ipc/terminal";
 import * as spacesIpc from "./ipc/spaces";
 import * as projectsIpc from "./ipc/projects";
 import * as sessionsIpc from "./ipc/sessions";
+import * as foldersIpc from "./ipc/folders";
 import * as ccImportIpc from "./ipc/cc-import";
 import * as filesIpc from "./ipc/files";
 import * as claudeSessionsIpc from "./ipc/claude-sessions";
@@ -185,6 +186,7 @@ ipcMain.on("app:set-min-width", (_event, minWidth: number) => {
 spacesIpc.register();
 projectsIpc.register(getMainWindow);
 sessionsIpc.register();
+foldersIpc.register();
 ccImportIpc.register();
 filesIpc.register(getMainWindow);
 claudeSessionsIpc.register(getMainWindow);

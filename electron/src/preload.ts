@@ -95,9 +95,14 @@ contextBridge.exposeInMainWorld("claude", {
   restartSession: (sessionId: string, mcpServers?: unknown[], cwd?: string, effort?: string, model?: string) =>
     ipcRenderer.invoke("claude:restart-session", { sessionId, mcpServers, cwd, effort, model }),
   readFile: (filePath: string) => ipcRenderer.invoke("file:read", filePath),
+  renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke("file:rename", { oldPath, newPath }),
+  trashItem: (filePath: string) => ipcRenderer.invoke("file:trash", filePath),
+  newFile: (filePath: string) => ipcRenderer.invoke("file:new-file", filePath),
+  newFolder: (folderPath: string) => ipcRenderer.invoke("file:new-folder", folderPath),
   writeClipboardText: (text: string) => ipcRenderer.invoke("clipboard:write-text", text),
   openInEditor: (filePath: string, line?: number, editor?: string) => ipcRenderer.invoke("file:open-in-editor", { filePath, line, editor }),
   openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
+  showItemInFolder: (filePath: string) => ipcRenderer.invoke("shell:show-item-in-folder", filePath),
   generateTitle: (message: string, cwd?: string, engine?: string, sessionId?: string) =>
     ipcRenderer.invoke("claude:generate-title", { message, cwd, engine, sessionId }),
   projects: {
@@ -116,6 +121,15 @@ contextBridge.exposeInMainWorld("claude", {
     list: (projectId: string) => ipcRenderer.invoke("sessions:list", projectId),
     delete: (projectId: string, sessionId: string) => ipcRenderer.invoke("sessions:delete", projectId, sessionId),
     search: (projectIds: string[], query: string) => ipcRenderer.invoke("sessions:search", { projectIds, query }),
+    updateMeta: (projectId: string, sessionId: string, patch: { pinned?: boolean; folderId?: string | null; branch?: string }) =>
+      ipcRenderer.invoke("sessions:update-meta", { projectId, sessionId, patch }),
+  },
+  folders: {
+    list: (projectId: string) => ipcRenderer.invoke("folders:list", projectId),
+    create: (projectId: string, name: string) => ipcRenderer.invoke("folders:create", { projectId, name }),
+    delete: (projectId: string, folderId: string) => ipcRenderer.invoke("folders:delete", { projectId, folderId }),
+    rename: (projectId: string, folderId: string, name: string) => ipcRenderer.invoke("folders:rename", { projectId, folderId, name }),
+    pin: (projectId: string, folderId: string, pinned: boolean) => ipcRenderer.invoke("folders:pin", { projectId, folderId, pinned }),
   },
   spaces: {
     list: () => ipcRenderer.invoke("spaces:list"),

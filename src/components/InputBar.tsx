@@ -139,8 +139,10 @@ function ModelDropdown({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+        <Button
+          variant="ghost"
+          size="xs"
+          className={TOOLBAR_BTN}
           disabled={isProcessing}
         >
           {selectedModel?.label}
@@ -149,8 +151,8 @@ function ModelDropdown({
               · {selectedEffort}
             </span>
           )}
-          <ChevronDown className="h-3 w-3" />
-        </button>
+          <ChevronDown className="size-3" />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         {modelList.map((m) => {
@@ -227,13 +229,11 @@ function PermissionDropdown({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-        >
-          <Shield className="h-3 w-3" />
+        <Button variant="ghost" size="xs" className={TOOLBAR_BTN}>
+          <Shield className="size-3" />
           {selectedMode.label}
-          <ChevronDown className="h-3 w-3" />
-        </button>
+          <ChevronDown className="size-3" />
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         {PERMISSION_MODES.map((m) => {
@@ -275,21 +275,23 @@ function PlanModeToggle({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => onPlanModeChange(!planMode)}
-          className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors ${
+          className={`rounded-lg font-normal ${
             planMode
-              ? "text-blue-400 bg-blue-500/10"
+              ? "text-blue-400 bg-blue-500/10 hover:bg-blue-500/15 hover:text-blue-400 dark:hover:bg-blue-500/15"
               : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
           }`}
         >
-          <Map className="h-3 w-3" />
+          <Map className="size-3" />
           Plan
-        </button>
+        </Button>
       </TooltipTrigger>
       <TooltipContent side="top">
         <p className="text-xs">
-          {planMode ? "Plan mode on" : "Plan mode off"} ({isMac ? "⌘" : "Ctrl"}+⇧+P)
+          {planMode ? "Plan mode on" : "Plan mode off"} (⇧+Tab)
         </p>
       </TooltipContent>
     </Tooltip>
@@ -371,14 +373,11 @@ function EngineControls({
         {codexEffortOptions.length > 0 && onCodexEffortChange && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                disabled={isProcessing}
-              >
-                <Brain className="h-3 w-3" />
+              <Button variant="ghost" size="xs" className={TOOLBAR_BTN} disabled={isProcessing}>
+                <Brain className="size-3" />
                 {codexActiveEffort}
-                <ChevronDown className="h-3 w-3" />
-              </button>
+                <ChevronDown className="size-3" />
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {codexEffortOptions.map((opt) => (
@@ -411,14 +410,11 @@ function EngineControls({
         {onAcpPermissionBehaviorChange && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                disabled={isProcessing}
-              >
-                <Shield className="h-3 w-3" />
+              <Button variant="ghost" size="xs" className={TOOLBAR_BTN} disabled={isProcessing}>
+                <Shield className="size-3" />
                 {ACP_PERMISSION_BEHAVIORS.find(b => b.id === acpPermissionBehavior)?.label ?? "Ask"}
-                <ChevronDown className="h-3 w-3" />
-              </button>
+                <ChevronDown className="size-3" />
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {ACP_PERMISSION_BEHAVIORS.map((b) => (
@@ -444,13 +440,10 @@ function EngineControls({
             return (
               <DropdownMenu key={opt.id}>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                    disabled={isProcessing}
-                  >
+                  <Button variant="ghost" size="xs" className={TOOLBAR_BTN} disabled={isProcessing}>
                     {current?.name ?? opt.currentValue}
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
+                    <ChevronDown className="size-3" />
+                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   {flat.map((o) => (
@@ -509,6 +502,11 @@ const CLAUDE_EFFORT_DESCRIPTIONS: Record<ClaudeEffort, string> = {
   high: "Deep reasoning",
   max: "Maximum effort",
 };
+
+/** Shared className overrides for ghost toolbar buttons in the input bar.
+ *  Applied on top of `<Button variant="ghost" size="xs">` to match the
+ *  toolbar look: muted text, subtle hover, rounded-lg corners. */
+const TOOLBAR_BTN = "rounded-lg font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground";
 
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 type AcceptedMediaType = (typeof ACCEPTED_IMAGE_TYPES)[number];
@@ -1628,12 +1626,14 @@ export const InputBar = memo(function InputBar({
                   <Pencil className="h-2.5 w-2.5" />
                 </div>
                 {/* Remove button — top-right, stops propagation to prevent opening editor */}
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={(e) => { e.stopPropagation(); removeAttachment(att.id); }}
-                  className="absolute -end-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/att:opacity-100"
+                  className="absolute -end-1 -top-1 size-5 rounded-full bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:bg-background/95 hover:text-foreground group-hover/att:opacity-100"
                 >
-                  <X className="h-3 w-3" />
-                </button>
+                  <X className="size-3" />
+                </Button>
               </div>
             ))}
           </div>
@@ -1664,12 +1664,14 @@ export const InputBar = memo(function InputBar({
                     </span>
                   )}
                 </div>
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => onRemoveGrabbedElement?.(ge.id)}
-                  className="absolute -end-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/grab:opacity-100"
+                  className="absolute -end-1 -top-1 size-4 rounded-full bg-background/90 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:bg-background/95 hover:text-foreground group-hover/grab:opacity-100"
                 >
-                  <X className="h-2.5 w-2.5" />
-                </button>
+                  <X className="size-2.5" />
+                </Button>
               </div>
             ))}
           </div>
@@ -1690,24 +1692,28 @@ export const InputBar = memo(function InputBar({
         <div className="flex items-center gap-1 px-3 pb-2.5">
           {/* Left controls — scrollable as a defensive fallback (should never trigger with proper MIN_CHAT_WIDTH) */}
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none">
-            <button
+            <Button
+              variant="ghost"
+              size="xs"
+              className={TOOLBAR_BTN}
               onClick={() => fileInputRef.current?.click()}
-              className="flex shrink-0 items-center justify-center rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
               title="Attach image"
             >
-              <Paperclip className="h-3.5 w-3.5" />
-            </button>
+              <Paperclip className="size-3.5" />
+            </Button>
 
             {/* Voice dictation button */}
             {speech.isAvailable ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={speech.toggle}
                     disabled={speech.isModelLoading || speech.isTranscribing}
-                    className={`flex shrink-0 items-center justify-center rounded-lg px-2 py-1 transition-colors ${
+                    className={`rounded-lg font-normal ${
                       speech.isListening
-                        ? "text-red-400 bg-red-500/10 recording-pulse"
+                        ? "text-red-400 bg-red-500/10 recording-pulse hover:bg-red-500/15"
                         : speech.isTranscribing
                           ? "text-amber-400"
                           : speech.isModelLoading
@@ -1716,13 +1722,13 @@ export const InputBar = memo(function InputBar({
                     }`}
                   >
                     {speech.isListening ? (
-                      <MicOff className="h-3.5 w-3.5" />
+                      <MicOff className="size-3.5" />
                     ) : speech.isModelLoading || speech.isTranscribing ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="size-3.5 animate-spin" />
                     ) : (
-                      <Mic className="h-3.5 w-3.5" />
+                      <Mic className="size-3.5" />
                     )}
-                  </button>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
                   {speech.error
@@ -1739,11 +1745,13 @@ export const InputBar = memo(function InputBar({
             ) : speech.nativeHint ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
-                    className="flex shrink-0 items-center justify-center rounded-lg px-2 py-1 text-muted-foreground/40 cursor-default"
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="rounded-lg font-normal text-muted-foreground/40 cursor-default hover:bg-transparent"
                   >
-                    <Mic className="h-3.5 w-3.5" />
-                  </button>
+                    <Mic className="size-3.5" />
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top">{speech.nativeHint}</TooltipContent>
               </Tooltip>
@@ -1752,18 +1760,15 @@ export const InputBar = memo(function InputBar({
             {agents && agents.length > 1 && onAgentChange && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                    disabled={isProcessing}
-                  >
+                  <Button variant="ghost" size="xs" className={TOOLBAR_BTN} disabled={isProcessing}>
                     <AgentIcon
                       icon={selectedAgent ? getAgentIcon(selectedAgent) : ENGINE_ICONS.claude}
                       size={14}
                       className="shrink-0"
                     />
                     {selectedAgent?.name ?? "Claude Code"}
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
+                    <ChevronDown className="size-3" />
+                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   {(() => {
@@ -1860,9 +1865,11 @@ export const InputBar = memo(function InputBar({
               return (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={() => { if (!isProcessing) onCompact?.(); }}
-                      className={`flex items-center justify-center rounded-full p-0.5 transition-colors hover:bg-muted/40 ${isProcessing ? "opacity-40 cursor-default" : ""} ${getContextColor(percent)}`}
+                      className={`rounded-full p-0.5 hover:bg-muted/40 ${isProcessing ? "opacity-40 cursor-default" : ""} ${getContextColor(percent)}`}
                     >
                       <svg width="20" height="20" viewBox="0 0 20 20" className={isCompacting ? "animate-spin" : "-rotate-90"}>
                         <circle
@@ -1881,7 +1888,7 @@ export const InputBar = memo(function InputBar({
                           strokeDashoffset={isCompacting ? circumference * 0.7 : dashOffset}
                         />
                       </svg>
-                    </button>
+                    </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-64">
                     <div className="space-y-1.5 text-xs">

@@ -14,6 +14,12 @@ export interface SessionMeta {
   totalCost?: number;
   engine?: "claude" | "acp" | "codex";
   codexThreadId?: string;
+  /** Which folder this chat belongs to (undefined = root level). */
+  folderId?: string;
+  /** Whether this chat is pinned to the top of the sidebar. */
+  pinned?: boolean;
+  /** Git branch at session creation time. */
+  branch?: string;
 }
 
 /**
@@ -45,5 +51,8 @@ export function extractSessionMeta(data: Record<string, unknown>, lastMessageAt:
     totalCost: (data.totalCost as number) || 0,
     engine: data.engine as SessionMeta["engine"],
     codexThreadId: data.codexThreadId as string | undefined,
+    folderId: data.folderId as string | undefined,
+    pinned: data.pinned as boolean | undefined,
+    branch: data.branch as string | undefined,
   };
 }

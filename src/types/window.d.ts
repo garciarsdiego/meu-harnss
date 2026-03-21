@@ -41,6 +41,12 @@ interface SessionListItem {
   totalCost: number;
   engine?: EngineId;
   codexThreadId?: string;
+  /** Which folder this chat belongs to (undefined = root level). */
+  folderId?: string;
+  /** Whether this chat is pinned to the top of the sidebar. */
+  pinned?: boolean;
+  /** Git branch at session creation time. */
+  branch?: string;
 }
 
 type CodexImageInput = { type: "image"; url: string } | { type: "localImage"; path: string };
@@ -83,9 +89,14 @@ declare global {
       revertFiles: (sessionId: string, checkpointId: string) => Promise<{ ok?: boolean; error?: string }>;
       restartSession: (sessionId: string, mcpServers?: McpServerConfig[], cwd?: string, effort?: ClaudeEffort, model?: string) => Promise<{ ok?: boolean; error?: string; restarted?: boolean }>;
       readFile: (filePath: string) => Promise<{ content?: string; error?: string }>;
+      renameFile: (oldPath: string, newPath: string) => Promise<{ ok?: boolean; error?: string }>;
+      trashItem: (filePath: string) => Promise<{ ok?: boolean; error?: string }>;
+      newFile: (filePath: string) => Promise<{ ok?: boolean; error?: string }>;
+      newFolder: (folderPath: string) => Promise<{ ok?: boolean; error?: string }>;
       writeClipboardText: (text: string) => Promise<{ ok?: boolean; error?: string }>;
       openInEditor: (filePath: string, line?: number, editor?: string) => Promise<{ ok?: boolean; editor?: string; error?: string }>;
       openExternal: (url: string) => Promise<{ ok?: boolean; error?: string }>;
+      showItemInFolder: (filePath: string) => Promise<{ ok?: boolean; error?: string }>;
       generateTitle: (
         message: string,
         cwd?: string,
@@ -149,6 +160,18 @@ declare global {
           messageResults: SearchMessageResult[];
           sessionResults: SearchSessionResult[];
         }>;
+        updateMeta: (projectId: string, sessionId: string, patch: {
+          pinned?: boolean;
+          folderId?: string | null;
+          branch?: string;
+        }) => Promise<{ ok?: boolean; error?: string }>;
+      };
+      folders: {
+        list: (projectId: string) => Promise<import("./ui").ChatFolder[]>;
+        create: (projectId: string, name: string) => Promise<import("./ui").ChatFolder>;
+        delete: (projectId: string, folderId: string) => Promise<{ ok?: boolean; error?: string }>;
+        rename: (projectId: string, folderId: string, name: string) => Promise<{ ok?: boolean; error?: string }>;
+        pin: (projectId: string, folderId: string, pinned: boolean) => Promise<{ ok?: boolean; error?: string }>;
       };
       spaces: {
         list: () => Promise<Space[]>;

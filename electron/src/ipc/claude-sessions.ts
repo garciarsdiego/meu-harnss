@@ -74,6 +74,27 @@ async function setSessionPermissionMode(
   log(logLabel, `session=${sessionId.slice(0, 8)} mode=${permissionMode}`);
 }
 
+/**
+ * Explicitly set permissionMode on a freshly created query handle.
+ * The SDK CLI may ignore the `permissionMode` query option for resumed sessions
+ * (it loads saved state from disk). Calling setPermissionMode() on the live handle
+ * is guaranteed to take effect.
+ */
+async function enforcePermissionMode(
+  sessionId: string,
+  queryHandle: QueryHandle,
+  permissionMode: string | undefined,
+  context: string,
+): Promise<void> {
+  if (!permissionMode || permissionMode === "default") return;
+  try {
+    await queryHandle.setPermissionMode(permissionMode);
+    log("PERMISSION_MODE_ENFORCED", `session=${sessionId.slice(0, 8)} mode=${permissionMode} (${context})`);
+  } catch (err) {
+    reportError("PERMISSION_MODE_ENFORCE_ERR", err, { engine: "claude", sessionId, permissionMode, context });
+  }
+}
+
 function summarizeSpawnOptions(options: Record<string, unknown>): Record<string, unknown> {
   const mcpServers = options.mcpServers;
   const mcpSummary = mcpServers && typeof mcpServers === "object"
@@ -115,7 +136,7 @@ function summarizeEvent(event: Record<string, unknown>): string {
   switch (event.type) {
     case "system": {
       if (event.subtype === "init") {
-        return `system/init session=${(event.session_id as string)?.slice(0, 8)} model=${event.model}`;
+        return `system/init session=${(event.session_id as string)?.slice(0, 8)} model=${event.model} permMode=${event.permissionMode ?? "?"}`;
       }
       if (event.subtype === "task_started") {
         return `system/task_started task=${(event.task_id as string)?.slice(0, 8)} tool_use=${(event.tool_use_id as string)?.slice(0, 12)} desc="${event.description}"`;
@@ -593,6 +614,9 @@ async function restartSession(
     return { error: `Restart failed: ${errMsg}` };
   }
 
+  // Restarted sessions always resume — enforce permission mode on the live handle.
+  await enforcePermissionMode(sessionId, q, opts.permissionMode, "restart");
+
   startEventLoop(sessionId, q, newSession, getMainWindow);
 
   return { ok: true, restarted: true };
@@ -691,6 +715,12 @@ export function register(getMainWindow: () => BrowserWindow | null): void {
 
       const q = query({ prompt: channel, options: queryOptions });
       session.queryHandle = q;
+
+      // For resumed sessions, explicitly enforce the permission mode on the live
+      // handle — the SDK CLI may load its own saved state and ignore the query option.
+      if (options.resume) {
+        await enforcePermissionMode(sessionId, q, options.permissionMode, "start-resume");
+      }
 
       startEventLoop(sessionId, q, session, getMainWindow);
 

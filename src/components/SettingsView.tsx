@@ -65,6 +65,8 @@ interface SettingsViewProps {
   onThemeChange: (t: ThemeOption) => void;
   islandLayout: boolean;
   onIslandLayoutChange: (enabled: boolean) => void;
+  islandShine: boolean;
+  onIslandShineChange: (enabled: boolean) => void;
   autoGroupTools: boolean;
   onAutoGroupToolsChange: (enabled: boolean) => void;
   avoidGroupingEdits: boolean;
@@ -95,6 +97,8 @@ export const SettingsView = memo(function SettingsView({
   onThemeChange,
   islandLayout,
   onIslandLayoutChange,
+  islandShine,
+  onIslandShineChange,
   autoGroupTools,
   onAutoGroupToolsChange,
   avoidGroupingEdits,
@@ -155,6 +159,8 @@ export const SettingsView = memo(function SettingsView({
             onThemeChange={onThemeChange}
             islandLayout={islandLayout}
             onIslandLayoutChange={onIslandLayoutChange}
+            islandShine={islandShine}
+            onIslandShineChange={onIslandShineChange}
             autoGroupTools={autoGroupTools}
             onAutoGroupToolsChange={onAutoGroupToolsChange}
             avoidGroupingEdits={avoidGroupingEdits}
@@ -235,7 +241,7 @@ export const SettingsView = memo(function SettingsView({
       default:
         return null;
     }
-  }, [activeSection, appSettings, updateAppSettings, agents, onSaveAgent, onDeleteAgent, theme, onThemeChange, islandLayout, onIslandLayoutChange, autoGroupTools, onAutoGroupToolsChange, avoidGroupingEdits, onAvoidGroupingEditsChange, autoExpandTools, onAutoExpandToolsChange, transparentToolPicker, onTransparentToolPickerChange, coloredSidebarIcons, onColoredSidebarIconsChange, transparency, onTransparencyChange, glassSupported, onReplayWelcome]);
+  }, [activeSection, appSettings, updateAppSettings, agents, onSaveAgent, onDeleteAgent, theme, onThemeChange, islandLayout, onIslandLayoutChange, islandShine, onIslandShineChange, autoGroupTools, onAutoGroupToolsChange, avoidGroupingEdits, onAvoidGroupingEditsChange, autoExpandTools, onAutoExpandToolsChange, transparentToolPicker, onTransparentToolPickerChange, coloredSidebarIcons, onColoredSidebarIconsChange, transparency, onTransparencyChange, glassSupported, onReplayWelcome]);
 
   return (
     <div className={`island flex flex-1 flex-col overflow-hidden bg-background ${islandLayout ? "rounded-[var(--island-radius)]" : "rounded-none"}`}>

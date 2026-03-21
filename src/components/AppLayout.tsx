@@ -370,7 +370,7 @@ Link: ${issue.url}`;
 
   return (
     <div
-      className={`relative flex h-screen overflow-hidden bg-sidebar text-foreground${settings.islandLayout ? "" : " no-islands"}`}
+      className={`relative flex h-screen overflow-hidden bg-sidebar text-foreground${settings.islandLayout ? "" : " no-islands"}${settings.islandShine ? "" : " no-island-shine"}`}
       style={islandLayoutVars}
     >
       {/* Glass tint overlay — sits behind content, tints the native transparency */}
@@ -415,6 +415,7 @@ Link: ${issue.url}`;
         onCreateFolder={o.handleCreateFolder}
         onRenameFolder={o.handleRenameFolder}
         onDeleteFolder={o.handleDeleteFolder}
+        onPinFolder={o.handlePinFolder}
         onSetOrganizeByChatBranch={settings.setOrganizeByChatBranch}
         spaces={spaceManager.spaces}
         activeSpaceId={spaceManager.activeSpaceId}
@@ -437,6 +438,8 @@ Link: ${issue.url}`;
             onThemeChange={settings.setTheme}
             islandLayout={settings.islandLayout}
             onIslandLayoutChange={settings.setIslandLayout}
+            islandShine={settings.islandShine}
+            onIslandShineChange={settings.setIslandShine}
             autoGroupTools={settings.autoGroupTools}
             onAutoGroupToolsChange={settings.setAutoGroupTools}
             avoidGroupingEdits={settings.avoidGroupingEdits}

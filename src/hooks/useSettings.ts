@@ -92,6 +92,8 @@ export interface Settings {
   setTheme: (t: ThemeOption) => void;
   islandLayout: boolean;
   setIslandLayout: (enabled: boolean) => void;
+  islandShine: boolean;
+  setIslandShine: (enabled: boolean) => void;
   transparency: boolean;
   setTransparency: (enabled: boolean) => void;
   planMode: boolean;
@@ -156,6 +158,9 @@ export interface Settings {
   bottomToolsSplitRatios: number[];
   setBottomToolsSplitRatios: (r: number[]) => void;
   saveBottomToolsSplitRatios: () => void;
+  /** Whether to group sidebar chats by git branch (per-project, default false). */
+  organizeByChatBranch: boolean;
+  setOrganizeByChatBranch: (on: boolean) => void;
 }
 
 /** Read toolsSplitRatios, with migration from the old single-ratio key */
@@ -296,6 +301,14 @@ export function useSettings(projectId: string | null, engine: EngineId = "claude
   const setIslandLayout = useCallback((enabled: boolean) => {
     setIslandLayoutRaw(enabled);
     localStorage.setItem("harnss-island-layout", String(enabled));
+  }, []);
+
+  const [islandShine, setIslandShineRaw] = useState(() =>
+    readBool("harnss-island-shine", true),
+  );
+  const setIslandShine = useCallback((enabled: boolean) => {
+    setIslandShineRaw(enabled);
+    localStorage.setItem("harnss-island-shine", String(enabled));
   }, []);
 
   const [transparency, setTransparencyRaw] = useState(() =>
@@ -669,6 +682,16 @@ export function useSettings(projectId: string | null, engine: EngineId = "claude
     localStorage.setItem(`harnss-${pid}-bottom-tools-split-ratios`, JSON.stringify(bottomToolsSplitRatiosRef.current));
   }, [pid]);
 
+  // ── Per-project sidebar organization ──
+
+  const [organizeByChatBranch, setOrganizeByChatBranchRaw] = useState(() =>
+    readBool(`harnss-${pid}-organize-by-branch`, false),
+  );
+  const setOrganizeByChatBranch = useCallback((on: boolean) => {
+    setOrganizeByChatBranchRaw(on);
+    localStorage.setItem(`harnss-${pid}-organize-by-branch`, String(on));
+  }, [pid]);
+
   // ── Re-read per-project values when projectId changes ──
 
   useEffect(() => {
@@ -687,6 +710,8 @@ export function useSettings(projectId: string | null, engine: EngineId = "claude
 
     const bottom = readJson<ToolId[]>(`harnss-${pid}-bottom-tools`, []).filter((id) => VALID_TOOL_IDS.has(id as ToolId));
     setBottomToolsRaw(new Set(bottom));
+
+    setOrganizeByChatBranchRaw(readBool(`harnss-${pid}-organize-by-branch`, false));
   }, [pid]);
 
   return {
@@ -694,6 +719,8 @@ export function useSettings(projectId: string | null, engine: EngineId = "claude
     setTheme,
     islandLayout,
     setIslandLayout,
+    islandShine,
+    setIslandShine,
     transparency,
     setTransparency,
     planMode,
@@ -752,5 +779,7 @@ export function useSettings(projectId: string | null, engine: EngineId = "claude
     bottomToolsSplitRatios,
     setBottomToolsSplitRatios,
     saveBottomToolsSplitRatios,
+    organizeByChatBranch,
+    setOrganizeByChatBranch,
   };
 }

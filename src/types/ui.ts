@@ -183,6 +183,18 @@ export interface Project {
   iconType?: "emoji" | "lucide";
 }
 
+/** A user-created folder for organizing chats within a project. */
+export interface ChatFolder {
+  id: string;
+  projectId: string;
+  name: string;
+  createdAt: number;
+  /** Display order within the project (lower = higher in list). */
+  order: number;
+  /** Whether this folder is pinned to the top of the sidebar. */
+  pinned?: boolean;
+}
+
 /** Fields shared between live and persisted session representations. */
 export interface SessionBase {
   id: string;
@@ -196,6 +208,12 @@ export interface SessionBase {
   agentSessionId?: string;
   agentId?: string;
   codexThreadId?: string;
+  /** Which folder this chat belongs to (undefined = root level). */
+  folderId?: string;
+  /** Whether this chat is pinned to the top of the sidebar. */
+  pinned?: boolean;
+  /** Git branch at session creation time. */
+  branch?: string;
 }
 
 export interface ChatSession extends SessionBase {

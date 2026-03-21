@@ -3,7 +3,7 @@ import { Bug, PanelLeft, Plus } from "lucide-react";
 import { isMac } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { ChatSession, InstalledAgent, Project, Space } from "@/types";
+import type { ChatFolder, ChatSession, InstalledAgent, Project, Space } from "@/types";
 import { APP_SIDEBAR_WIDTH } from "@/lib/layout-constants";
 import { SidebarSearch } from "./SidebarSearch";
 import { SpaceBar } from "./SpaceBar";
@@ -18,6 +18,8 @@ interface AppSidebarProps {
   activeSessionId: string | null;
   jiraBoardProjectId: string | null;
   jiraBoardEnabled: boolean;
+  foldersByProject: Record<string, ChatFolder[]>;
+  organizeByChatBranch: boolean;
   onNewChat: (projectId: string) => void;
   onToggleProjectJiraBoard: (projectId: string) => void;
   onSelectSession: (id: string) => void;
@@ -32,6 +34,13 @@ interface AppSidebarProps {
   onNavigateToMessage: (sessionId: string, messageId: string) => void;
   onMoveProjectToSpace: (projectId: string, spaceId: string) => void;
   onReorderProject: (projectId: string, targetProjectId: string) => void;
+  onPinSession: (sessionId: string, pinned: boolean) => void;
+  onMoveSessionToFolder: (sessionId: string, folderId: string | null) => void;
+  onCreateFolder: (projectId: string) => void;
+  onRenameFolder: (projectId: string, folderId: string, name: string) => void;
+  onDeleteFolder: (projectId: string, folderId: string) => void;
+  onPinFolder: (projectId: string, folderId: string, pinned: boolean) => void;
+  onSetOrganizeByChatBranch: (on: boolean) => void;
   spaces: Space[];
   activeSpaceId: string;
   onSelectSpace: (id: string) => void;
@@ -50,6 +59,8 @@ export const AppSidebar = memo(function AppSidebar({
   activeSessionId,
   jiraBoardProjectId,
   jiraBoardEnabled,
+  foldersByProject,
+  organizeByChatBranch,
   onNewChat,
   onToggleProjectJiraBoard,
   onSelectSession,
@@ -64,6 +75,13 @@ export const AppSidebar = memo(function AppSidebar({
   onNavigateToMessage,
   onMoveProjectToSpace,
   onReorderProject,
+  onPinSession,
+  onMoveSessionToFolder,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onPinFolder,
+  onSetOrganizeByChatBranch,
   spaces,
   activeSpaceId,
   onSelectSpace,
@@ -219,6 +237,7 @@ export const AppSidebar = memo(function AppSidebar({
               const projectSessions = sessions.filter(
                 (s) => s.projectId === project.id,
               );
+              const projectFolders = foldersByProject[project.id] ?? [];
 
               return (
                 <ProjectSection
@@ -226,9 +245,11 @@ export const AppSidebar = memo(function AppSidebar({
                   islandLayout={islandLayout}
                   project={project}
                   sessions={projectSessions}
+                  folders={projectFolders}
                   activeSessionId={activeSessionId}
                   jiraBoardEnabled={jiraBoardEnabled}
                   isJiraBoardOpen={jiraBoardProjectId === project.id}
+                  organizeByChatBranch={organizeByChatBranch}
                   onNewChat={() => onNewChat(project.id)}
                   onToggleJiraBoard={() => onToggleProjectJiraBoard(project.id)}
                   onSelectSession={onSelectSession}
@@ -250,6 +271,13 @@ export const AppSidebar = memo(function AppSidebar({
                     onReorderProject(project.id, targetId)
                   }
                   defaultChatLimit={defaultChatLimit}
+                  onPinSession={onPinSession}
+                  onMoveSessionToFolder={onMoveSessionToFolder}
+                  onCreateFolder={() => onCreateFolder(project.id)}
+                  onRenameFolder={onRenameFolder}
+                  onDeleteFolder={onDeleteFolder}
+                  onPinFolder={onPinFolder}
+                  onSetOrganizeByChatBranch={onSetOrganizeByChatBranch}
                   agents={agents}
                 />
               );

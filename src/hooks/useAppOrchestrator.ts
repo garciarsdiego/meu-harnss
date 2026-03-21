@@ -25,7 +25,7 @@ import { getStoredProjectGitCwd, resolveProjectForSpace } from "@/lib/space-proj
 import { getTodoItems } from "@/lib/todo-utils";
 import { isWindows } from "@/lib/utils";
 import { COLUMN_TOOL_IDS, type ToolId } from "@/components/ToolPicker";
-import type { ImageAttachment, Space, SpaceColor, InstalledAgent, AcpPermissionBehavior, ClaudeEffort, EngineId } from "@/types";
+import type { ImageAttachment, Space, SpaceColor, InstalledAgent, AcpPermissionBehavior, ClaudeEffort, EngineId, ChatFolder } from "@/types";
 import type { NotificationSettings } from "@/types/ui";
 
 export function useAppOrchestrator() {
@@ -643,10 +643,10 @@ export function useAppOrchestrator() {
     });
   }, [hasAgents]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cmd+Shift+P (Mac) / Ctrl+Shift+P — toggle plan mode for Claude and Codex engines
+  // Shift+Tab — toggle plan mode for Claude and Codex engines
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "p") {
+      if (e.shiftKey && e.key === "Tab") {
         e.preventDefault();
         const engine = manager.activeSession?.engine ?? selectedAgent?.engine ?? "claude";
         if (engine === "acp") return; // ACP doesn't support plan mode
@@ -741,6 +741,125 @@ export function useAppOrchestrator() {
 
   const activeSpaceTerminals = spaceTerminals.getSpaceState(spaceManager.activeSpaceId);
 
+  // ── Sync current git branch to session manager for new session creation ──
+
+  useEffect(() => {
+    if (!activeProjectPath) {
+      manager.setCurrentBranch(undefined);
+      return;
+    }
+    let cancelled = false;
+    window.claude.git.status(activeProjectPath).then((status) => {
+      if (!cancelled && status.branch) {
+        manager.setCurrentBranch(status.branch);
+      }
+    }).catch(() => {
+      if (!cancelled) manager.setCurrentBranch(undefined);
+    });
+    return () => { cancelled = true; };
+  }, [activeProjectPath, manager.setCurrentBranch]);
+
+  // ── Folder & Pin management ──
+
+  const [foldersByProject, setFoldersByProject] = useState<Record<string, ChatFolder[]>>({});
+
+  // Load folders for all projects on mount and project changes
+  useEffect(() => {
+    const loadFolders = async () => {
+      const result: Record<string, ChatFolder[]> = {};
+      for (const project of projectManager.projects) {
+        try {
+          result[project.id] = await window.claude.folders.list(project.id);
+        } catch {
+          result[project.id] = [];
+        }
+      }
+      setFoldersByProject(result);
+    };
+    loadFolders();
+  }, [projectManager.projects]);
+
+  const handleCreateFolder = useCallback(async (projectId: string) => {
+    const name = "New folder";
+    try {
+      const folder = await window.claude.folders.create(projectId, name);
+      setFoldersByProject((prev) => ({
+        ...prev,
+        [projectId]: [...(prev[projectId] ?? []), folder],
+      }));
+    } catch (err) {
+      console.error("[handleCreateFolder]", err);
+    }
+  }, []);
+
+  const handleRenameFolder = useCallback(async (projectId: string, folderId: string, name: string) => {
+    try {
+      await window.claude.folders.rename(projectId, folderId, name);
+      setFoldersByProject((prev) => ({
+        ...prev,
+        [projectId]: (prev[projectId] ?? []).map((f) =>
+          f.id === folderId ? { ...f, name } : f,
+        ),
+      }));
+    } catch (err) {
+      console.error("[handleRenameFolder]", err);
+    }
+  }, []);
+
+  const handleDeleteFolder = useCallback(async (projectId: string, folderId: string) => {
+    try {
+      await window.claude.folders.delete(projectId, folderId);
+      setFoldersByProject((prev) => ({
+        ...prev,
+        [projectId]: (prev[projectId] ?? []).filter((f) => f.id !== folderId),
+      }));
+      // Sessions that were in this folder get their folderId cleared on the backend
+      // Update local session state too
+      manager.setSessions((prev) =>
+        prev.map((s) => (s.folderId === folderId ? { ...s, folderId: undefined } : s)),
+      );
+    } catch (err) {
+      console.error("[handleDeleteFolder]", err);
+    }
+  }, [manager.setSessions]);
+
+  const handlePinSession = useCallback(async (sessionId: string, pinned: boolean) => {
+    // Use setSessions functional form to find + update atomically (avoids stale sessions dep)
+    manager.setSessions((prev) => {
+      const session = prev.find((s) => s.id === sessionId);
+      if (!session) return prev;
+      // Fire IPC in the background (don't block the state update)
+      window.claude.sessions.updateMeta(session.projectId, sessionId, { pinned: pinned || undefined })
+        .catch((err) => console.error("[handlePinSession]", err));
+      return prev.map((s) => (s.id === sessionId ? { ...s, pinned: pinned || undefined } : s));
+    });
+  }, [manager.setSessions]);
+
+  const handlePinFolder = useCallback(async (projectId: string, folderId: string, pinned: boolean) => {
+    try {
+      await window.claude.folders.pin(projectId, folderId, pinned);
+      setFoldersByProject((prev) => ({
+        ...prev,
+        [projectId]: (prev[projectId] ?? []).map((f) =>
+          f.id === folderId ? { ...f, pinned: pinned || undefined } : f,
+        ),
+      }));
+    } catch (err) {
+      console.error("[handlePinFolder]", err);
+    }
+  }, []);
+
+  const handleMoveSessionToFolder = useCallback(async (sessionId: string, folderId: string | null) => {
+    // Use setSessions functional form to find + update atomically
+    manager.setSessions((prev) => {
+      const session = prev.find((s) => s.id === sessionId);
+      if (!session) return prev;
+      window.claude.sessions.updateMeta(session.projectId, sessionId, { folderId })
+        .catch((err) => console.error("[handleMoveSessionToFolder]", err));
+      return prev.map((s) => (s.id === sessionId ? { ...s, folderId: folderId ?? undefined } : s));
+    });
+  }, [manager.setSessions]);
+
   return {
     // Core managers
     sidebar,
@@ -825,5 +944,14 @@ export function useAppOrchestrator() {
     handleDeleteSpace,
     handleSaveSpace,
     handleMoveProjectToSpace,
+
+    // Folder & Pin management
+    foldersByProject,
+    handleCreateFolder,
+    handleRenameFolder,
+    handleDeleteFolder,
+    handlePinFolder,
+    handlePinSession,
+    handleMoveSessionToFolder,
   };
 }

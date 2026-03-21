@@ -35,6 +35,7 @@ export type {
   SessionInfo,
   Project,
   SessionBase,
+  ChatFolder,
   ChatSession,
   PersistedSession,
   PermissionRequest,
