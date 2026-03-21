@@ -36,6 +36,13 @@ try {
       root.classList.add("glass-enabled");
     }
   });
+
+  // Push stored theme to main process early so glass appearance is correct
+  // before React mounts. "system" is the default — only override if explicit.
+  const storedTheme = globals.localStorage?.getItem("harnss-theme");
+  if (storedTheme === "light" || storedTheme === "dark") {
+    ipcRenderer.send("glass:set-theme", storedTheme);
+  }
 } catch (e) {
   console.error("[preload] early setup failed:", e);
 }
@@ -43,6 +50,12 @@ try {
 contextBridge.exposeInMainWorld("claude", {
   getGlassSupported: () => ipcRenderer.invoke("app:getGlassSupported"),
   setMinWidth: (width: number) => ipcRenderer.send("app:set-min-width", width),
+  glass: {
+    setTintColor: (tintColor: string | null) =>
+      ipcRenderer.send("glass:set-tint-color", tintColor),
+    setTheme: (theme: string) =>
+      ipcRenderer.send("glass:set-theme", theme),
+  },
   start: (options: unknown) => ipcRenderer.invoke("claude:start", options),
   send: (sessionId: string, message: unknown) => ipcRenderer.invoke("claude:send", { sessionId, message }),
   stop: (sessionId: string, reason?: string) =>
