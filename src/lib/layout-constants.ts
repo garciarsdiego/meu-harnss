@@ -50,3 +50,68 @@ export function getBootstrapMinWindowWidth(platform: string): number {
 
   return platform === "win32" ? width + WINDOWS_FRAME_BUFFER_WIDTH : width;
 }
+
+// ── Split view constants ──
+
+/** Maximum number of panes (including the primary pane). */
+export const MAX_SPLIT_PANES = 4;
+
+/** Maximum number of extra panes (beyond the primary). */
+export const MAX_EXTRA_PANES = MAX_SPLIT_PANES - 1;
+
+/** Minimum chat pane width in split mode — reduced from 704px to fit multiple panes. */
+export const MIN_CHAT_WIDTH_SPLIT = 400;
+
+/** Split handle width between panes. */
+export const SPLIT_HANDLE_WIDTH = ISLAND_PANEL_GAP;
+
+/** Minimum width fraction for any single pane. */
+export const MIN_PANE_WIDTH_FRACTION = 0.15;
+
+/** Minimum split ratio (prevents either pane from becoming too narrow). */
+export const MIN_SPLIT_RATIO = 0.3;
+
+/** Maximum split ratio. */
+export const MAX_SPLIT_RATIO = 0.7;
+
+/** Default split ratio (50/50). */
+export const DEFAULT_SPLIT_RATIO = 0.5;
+
+/** Minimum height for per-pane tool drawer. */
+export const MIN_PANE_DRAWER_HEIGHT = 120;
+
+/** Maximum height for per-pane tool drawer. */
+export const MAX_PANE_DRAWER_HEIGHT = 400;
+
+/** Default height for per-pane tool drawer. */
+export const DEFAULT_PANE_DRAWER_HEIGHT = 200;
+
+/** Width of the animated drop zone when dragging a session into split view. */
+export const SPLIT_DROP_ZONE_WIDTH = 200;
+
+/** Minimum window width for split view (sidebar + margin + N panes + handles). */
+export function getMinSplitViewWindowWidth(platform: string, paneCount = 2): number {
+  const handles = Math.max(0, paneCount - 1) * SPLIT_HANDLE_WIDTH;
+  const width =
+    APP_SIDEBAR_WIDTH +
+    ISLAND_LAYOUT_MARGIN +
+    MIN_CHAT_WIDTH_SPLIT * paneCount +
+    handles;
+
+  return platform === "win32" ? width + WINDOWS_FRAME_BUFFER_WIDTH : width;
+}
+
+/** Calculate equal width fractions for N panes. */
+export function equalWidthFractions(count: number): number[] {
+  if (count <= 0) return [1];
+  const fraction = 1 / count;
+  return Array.from({ length: count }, () => fraction);
+}
+
+/** Clamp width fractions so no pane is below MIN_PANE_WIDTH_FRACTION. */
+export function clampWidthFractions(fractions: number[]): number[] {
+  if (fractions.length <= 1) return [1];
+  const clamped = fractions.map(f => Math.max(MIN_PANE_WIDTH_FRACTION, f));
+  const sum = clamped.reduce((a, b) => a + b, 0);
+  return clamped.map(f => f / sum); // normalize to sum=1
+}

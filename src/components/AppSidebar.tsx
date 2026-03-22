@@ -49,6 +49,8 @@ interface AppSidebarProps {
   onDeleteSpace: (id: string) => void;
   onOpenSettings: () => void;
   agents?: InstalledAgent[];
+  onOpenInSplitView?: (sessionId: string) => void;
+  canOpenSessionInSplitView?: (sessionId: string) => boolean;
 }
 
 export const AppSidebar = memo(function AppSidebar({
@@ -90,6 +92,8 @@ export const AppSidebar = memo(function AppSidebar({
   onDeleteSpace,
   onOpenSettings,
   agents,
+  onOpenInSplitView,
+  canOpenSessionInSplitView,
 }: AppSidebarProps) {
   // Load default chat limit from main-process settings
   const [defaultChatLimit, setDefaultChatLimit] = useState(10);
@@ -279,6 +283,8 @@ export const AppSidebar = memo(function AppSidebar({
                   onPinFolder={onPinFolder}
                   onSetOrganizeByChatBranch={onSetOrganizeByChatBranch}
                   agents={agents}
+                  onOpenInSplitView={onOpenInSplitView}
+                  canOpenSessionInSplitView={canOpenSessionInSplitView}
                 />
               );
             })}

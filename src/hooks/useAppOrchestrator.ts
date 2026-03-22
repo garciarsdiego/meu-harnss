@@ -10,16 +10,11 @@ import { useBackgroundAgents } from "@/hooks/useBackgroundAgents";
 import { useAgentRegistry } from "@/hooks/useAgentRegistry";
 import { useAcpAgentAutoUpdate } from "@/hooks/useAcpAgentAutoUpdate";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useSplitView } from "@/hooks/useSplitView";
 import {
   APP_SIDEBAR_WIDTH,
-  getMinChatWidth,
-  getResizeHandleWidth,
-  getToolPickerWidth,
-  ISLAND_LAYOUT_MARGIN,
-  WINDOWS_FRAME_BUFFER_WIDTH,
-  MIN_RIGHT_PANEL_WIDTH,
-  MIN_TOOLS_PANEL_WIDTH,
 } from "@/lib/layout-constants";
+import { getAppMinimumWidth } from "@/lib/split-layout";
 import { resolveModelValue } from "@/lib/model-utils";
 import { getStoredProjectGitCwd, resolveProjectForSpace } from "@/lib/space-projects";
 import { getTodoItems } from "@/lib/todo-utils";
@@ -30,13 +25,19 @@ import type { NotificationSettings } from "@/types/ui";
 
 export function useAppOrchestrator() {
   const sidebar = useSidebar();
+  const splitView = useSplitView();
   const projectManager = useProjectManager();
   const spaceManager = useSpaceManager();
   const LAST_SESSION_KEY = "harnss-last-session-per-space";
   // Read ACP permission behavior early — it's a global setting (same localStorage key as useSettings)
   // so we can read it before useSettings which depends on manager.activeSession for per-project scoping
   const acpPermissionBehavior = (localStorage.getItem("harnss-acp-permission-behavior") ?? "ask") as AcpPermissionBehavior;
-  const manager = useSessionManager(projectManager.projects, acpPermissionBehavior, spaceManager.setActiveSpaceId);
+  const manager = useSessionManager(
+    projectManager.projects,
+    acpPermissionBehavior,
+    spaceManager.setActiveSpaceId,
+    splitView.visibleSessionIds,
+  );
 
   // Derive activeProjectId early so useSettings can scope per-project
   const activeProjectId = manager.activeSession?.projectId ?? manager.draftProjectId;
@@ -718,26 +719,21 @@ export function useAppOrchestrator() {
   const hasBottomTools = [...settings.activeTools].some((id) => COLUMN_TOOL_IDS.has(id) && settings.bottomTools.has(id)) && !!manager.activeSessionId;
 
   // ── Dynamic Electron minimum window width ──
-  const isIsland = settings.islandLayout;
-  const minChatWidth = getMinChatWidth(isIsland);
-  const margins = isIsland ? ISLAND_LAYOUT_MARGIN : 0;
-  const handleW = getResizeHandleWidth(isIsland);
-  const pickerW = getToolPickerWidth(isIsland);
-  // Windows native frame borders consume extra pixels from the content area
-  const winFrameBuffer = isWindows ? WINDOWS_FRAME_BUFFER_WIDTH : 0;
+  const isSplitViewEnabled = splitView.enabled && splitView.paneCount > 1;
 
   useEffect(() => {
-    const sidebarW = sidebar.isOpen ? APP_SIDEBAR_WIDTH : 0;
-    let minW = sidebarW + margins + minChatWidth + winFrameBuffer;
-
-    if (manager.activeSessionId) {
-      minW += pickerW;
-      if (hasRightPanel) minW += MIN_RIGHT_PANEL_WIDTH + handleW;
-      if (hasToolsColumn) minW += MIN_TOOLS_PANEL_WIDTH + handleW;
-    }
-
+    const minW = getAppMinimumWidth({
+      sidebarOpen: sidebar.isOpen,
+      isIslandLayout: settings.islandLayout,
+      hasActiveSession: !!manager.activeSessionId,
+      hasRightPanel,
+      hasToolsColumn,
+      isSplitViewEnabled,
+      splitPaneCount: splitView.paneCount,
+      isWindows,
+    });
     window.claude.setMinWidth(Math.max(minW, 600));
-  }, [sidebar.isOpen, hasRightPanel, hasToolsColumn, manager.activeSessionId, minChatWidth, margins, pickerW, handleW]);
+  }, [sidebar.isOpen, settings.islandLayout, manager.activeSessionId, hasRightPanel, hasToolsColumn, isSplitViewEnabled, splitView.paneCount]);
 
   // When tools column or bottom row becomes visible, fire resize so xterm terminals re-fit
   useEffect(() => {
@@ -868,6 +864,7 @@ export function useAppOrchestrator() {
   return {
     // Core managers
     sidebar,
+    splitView,
     projectManager,
     spaceManager,
     manager,

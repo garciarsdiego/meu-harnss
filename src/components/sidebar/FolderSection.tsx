@@ -30,6 +30,8 @@ export function FolderSection({
   onDeleteFolder,
   agents,
   defaultCollapsed = false,
+  onOpenInSplitView,
+  canOpenSessionInSplitView,
 }: {
   folder: ChatFolder;
   sessions: ChatSession[];
@@ -46,6 +48,8 @@ export function FolderSection({
   onDeleteFolder: () => void;
   agents?: InstalledAgent[];
   defaultCollapsed?: boolean;
+  onOpenInSplitView?: (sessionId: string) => void;
+  canOpenSessionInSplitView?: (sessionId: string) => boolean;
 }) {
   const [expanded, setExpanded] = useState(!defaultCollapsed);
   const [isEditing, setIsEditing] = useState(false);
@@ -211,6 +215,8 @@ export function FolderSection({
                 folders={allFolders}
                 onMoveToFolder={(folderId) => onMoveSessionToFolder(session.id, folderId)}
                 agents={agents}
+                onOpenInSplitView={onOpenInSplitView ? () => onOpenInSplitView(session.id) : undefined}
+                canOpenInSplitView={canOpenSessionInSplitView?.(session.id) ?? true}
               />
             ))
           )}

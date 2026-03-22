@@ -1,5 +1,7 @@
-import { useCallback, useRef, useEffect, useLayoutEffect, useState } from "react";
+import React, { useCallback, useMemo, useRef, useEffect, useLayoutEffect, useState } from "react";
+import { LayoutGroup, motion } from "motion/react";
 import { PanelLeft } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { normalizeRatios } from "@/hooks/useSettings";
 import { useAppOrchestrator } from "@/hooks/useAppOrchestrator";
@@ -12,6 +14,7 @@ import {
   ISLAND_RADIUS,
   RESIZE_HANDLE_WIDTH_ISLAND,
   TOOL_PICKER_WIDTH_ISLAND,
+  equalWidthFractions,
   getMinChatWidth,
 } from "@/lib/layout-constants";
 import type { GrabbedElement } from "@/types/ui";
@@ -39,6 +42,14 @@ import { CodexAuthDialog } from "./CodexAuthDialog";
 import { JiraBoardPanel } from "./JiraBoardPanel";
 import type { JiraIssue } from "@shared/types/jira";
 import { isMac, isWindows } from "@/lib/utils";
+import { SplitHandle } from "./split/SplitHandle";
+import { SplitDropZone } from "./split/SplitDropZone";
+import { PaneToolDrawer } from "./split/PaneToolDrawer";
+import { SplitPaneHost } from "./split/SplitPaneHost";
+import { usePaneResize } from "@/hooks/usePaneResize";
+import { useSplitDragDrop } from "@/hooks/useSplitDragDrop";
+import { MIN_CHAT_WIDTH_SPLIT, SPLIT_HANDLE_WIDTH } from "@/lib/layout-constants";
+import { getMaxVisibleSplitPaneCount } from "@/lib/split-layout";
 
 const JIRA_BOARD_BY_SPACE_KEY = "harnss-jira-board-by-space";
 
@@ -76,6 +87,7 @@ export function AppLayout() {
     handleCreateSpace, handleEditSpace,
     handleDeleteSpace, handleSaveSpace, handleMoveProjectToSpace,
     handleSeedDevExampleSpaceData,
+    splitView,
   } = o;
 
   const glassOverlayStyle = useSpaceTheme(
@@ -179,9 +191,10 @@ export function AppLayout() {
       if (project) {
         setJiraBoardProjectForSpace(project.spaceId || "default", null);
       }
+      splitView.dismissSplitView();
       await handleNewChat(projectId);
     },
-    [handleNewChat, projectManager.projects, setJiraBoardProjectForSpace],
+    [handleNewChat, projectManager.projects, setJiraBoardProjectForSpace, splitView.dismissSplitView],
   );
 
   const handleComposerClear = useCallback(
@@ -203,9 +216,10 @@ export function AppLayout() {
       if (project) {
         setJiraBoardProjectForSpace(project.spaceId || "default", null);
       }
+      splitView.dismissSplitView();
       handleSelectSession(sessionId);
     },
-    [handleSelectSession, manager.sessions, projectManager.projects, setJiraBoardProjectForSpace],
+    [handleSelectSession, manager.sessions, projectManager.projects, setJiraBoardProjectForSpace, splitView.dismissSplitView],
   );
 
   const handleToggleProjectJiraBoard = useCallback((projectId: string) => {
@@ -320,10 +334,148 @@ Link: ${issue.url}`;
     handleBottomResizeStart, handleBottomSplitStart,
   } = resize;
 
+  // ── Split view resize ──
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const topRowRef = useRef<HTMLDivElement>(null);
+  const [availableSplitWidth, setAvailableSplitWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const element = contentRef.current;
+    if (!element) return;
+
+    const updateAvailableSplitWidth = () => {
+      setAvailableSplitWidth(element.getBoundingClientRect().width);
+    };
+
+    updateAvailableSplitWidth();
+    const resizeObserver = new ResizeObserver(updateAvailableSplitWidth);
+    resizeObserver.observe(element);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [contentRef]);
+
+  const maxSplitPaneCount = useMemo(
+    () => getMaxVisibleSplitPaneCount(availableSplitWidth),
+    [availableSplitWidth],
+  );
+
+  const paneResize = usePaneResize({
+    widthFractions: splitView.widthFractions,
+    setWidthFractions: splitView.setWidthFractions,
+    containerRef: splitContainerRef,
+  });
+
+  const isSplitActive = splitView.enabled;
+  const splitPaneSessionIds = splitView.visibleSessionIds;
+
+  // ── Drag-and-drop from sidebar ──
+  const visibleSessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (isSplitActive) {
+      for (const sessionId of splitView.visibleSessionIds) ids.add(sessionId);
+      return ids;
+    }
+
+    if (manager.activeSessionId) ids.add(manager.activeSessionId);
+    return ids;
+  }, [isSplitActive, manager.activeSessionId, splitView.visibleSessionIds]);
+
+  useEffect(() => {
+    if (!isSplitActive) {
+      if (splitView.focusedSessionId !== null) {
+        splitView.setFocusedSession(null);
+      }
+      return;
+    }
+
+    if (splitView.focusedSessionId && visibleSessionIds.has(splitView.focusedSessionId)) {
+      return;
+    }
+
+    splitView.setFocusedSession(splitPaneSessionIds[0] ?? null);
+  }, [
+    isSplitActive,
+    splitPaneSessionIds,
+    splitView.focusedSessionId,
+    splitView.setFocusedSession,
+    visibleSessionIds,
+  ]);
+
+  useEffect(() => {
+    const validSessionIds = new Set(manager.sessions.map((session) => session.id));
+    splitView.pruneSplitSessions(validSessionIds);
+  }, [manager.sessions, splitView.pruneSplitSessions]);
+
+  const requestAddSplitSession = useCallback((sessionId: string, position?: number) => {
+    const result = splitView.requestAddSplitSession({
+      sessionId,
+      activeSessionId: manager.activeSessionId,
+      maxPaneCount: maxSplitPaneCount,
+      position,
+    });
+
+    if (!result.ok && result.reason === "insufficient-width") {
+      toast.error("Widen the window to add another split pane.");
+    }
+
+    return result.ok;
+  }, [manager.activeSessionId, maxSplitPaneCount, splitView]);
+
+  const handleCloseSplitPane = useCallback(async (sessionId: string | null) => {
+    if (!sessionId) {
+      splitView.dismissSplitView();
+      return;
+    }
+
+    if (sessionId !== manager.activeSessionId) {
+      splitView.removeSplitSession(sessionId);
+      return;
+    }
+
+    const paneIndex = splitView.visibleSessionIds.indexOf(sessionId);
+    const remainingSessionIds = splitView.visibleSessionIds.filter((visibleSessionId) => visibleSessionId !== sessionId);
+    const replacementSessionId = remainingSessionIds[paneIndex] ?? remainingSessionIds[paneIndex - 1] ?? remainingSessionIds[0] ?? null;
+
+    splitView.removeSplitSession(sessionId);
+    if (!replacementSessionId) {
+      return;
+    }
+
+    await manager.switchSession(replacementSessionId);
+  }, [
+    manager.activeSessionId,
+    manager.switchSession,
+    splitView.removeSplitSession,
+    splitView.visibleSessionIds,
+  ]);
+
+  const splitDragDrop = useSplitDragDrop({
+    paneCount: splitView.paneCount,
+    canAcceptDrop: !!manager.activeSessionId && splitView.paneCount < maxSplitPaneCount,
+    containerRef: splitContainerRef,
+    widthFractions: splitView.widthFractions,
+    onDrop: (sessionId, position) => {
+      requestAddSplitSession(sessionId, position);
+    },
+    visibleSessionIds,
+  });
+  const previewDropPosition = splitDragDrop.dragState.isDragging ? splitDragDrop.dragState.dropPosition : null;
+  const previewPaneCount = previewDropPosition === null ? splitView.paneCount : splitView.paneCount + 1;
+  const previewWidthFractions = useMemo(
+    () => previewDropPosition === null ? splitView.widthFractions : equalWidthFractions(previewPaneCount),
+    [previewDropPosition, previewPaneCount, splitView.widthFractions],
+  );
+
   // ── Chat scroll fade & titlebar tinting ──
 
   const chatIslandRef = useRef<HTMLDivElement>(null);
   const lastTopScrollProgressRef = useRef(0);
+
+  // Per-pane scroll progress refs for split view (up to 4 panes)
+  const paneRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const lastPaneScrollProgressRefs = useRef<number[]>([]);
+
 
   useEffect(() => {
     // Grabbed elements are session-specific context — discard on switch
@@ -341,6 +493,23 @@ Link: ${issue.url}`;
     lastTopScrollProgressRef.current = clamped;
     chatIslandRef.current?.style.setProperty("--chat-top-progress", clamped.toFixed(3));
   }, []);
+
+  /** Create a scroll progress callback for a specific pane index. */
+  const makePaneScrollCallback = useCallback((paneIndex: number) => {
+    return (progress: number) => {
+      const clamped = Math.max(0, Math.min(1, progress));
+      const prev = lastPaneScrollProgressRefs.current[paneIndex] ?? 0;
+      if (Math.abs(prev - clamped) < 0.005) return;
+      lastPaneScrollProgressRefs.current[paneIndex] = clamped;
+      paneRefs.current[paneIndex]?.style.setProperty("--chat-top-progress", clamped.toFixed(3));
+    };
+  }, []);
+
+  // Memoize per-pane scroll callbacks (stable across renders)
+  const paneScrollCallbacks = useMemo(
+    () => splitPaneSessionIds.map((_, index) => makePaneScrollCallback(index)),
+    [makePaneScrollCallback, splitPaneSessionIds],
+  );
 
   const handleScrolledToMessage = useCallback(() => {
     setScrollToMessageId(undefined);
@@ -378,6 +547,231 @@ Link: ${issue.url}`;
     ? `linear-gradient(to bottom, color-mix(in oklab, ${chatSurfaceColor} 100%, black 4.5%) 0%, color-mix(in oklab, ${chatSurfaceColor} 97.5%, black 1.75%) 18%, color-mix(in oklab, ${chatSurfaceColor} 93.5%, transparent) 48%, transparent 100%), radial-gradient(138% 88% at 50% 0%, color-mix(in srgb, black ${topFadeShadowOpacity}%, transparent) 0%, transparent 70%)`
     : `linear-gradient(to bottom, ${chatSurfaceColor} 0%, ${chatSurfaceColor} 34%, color-mix(in oklab, ${chatSurfaceColor} 90.5%, transparent) 60%, transparent 100%), radial-gradient(142% 92% at 50% 0%, color-mix(in srgb, black ${topFadeShadowOpacity}%, transparent) 0%, transparent 72%)`;
   const bottomFadeBackground = `linear-gradient(to top, ${chatSurfaceColor}, transparent)`;
+
+  const getPreviewPaneMetrics = useCallback((previewIndex: number) => {
+    const widthPercent = (previewWidthFractions[previewIndex] ?? (1 / previewPaneCount)) * 100;
+    const totalHandleWidth = (previewPaneCount - 1) * SPLIT_HANDLE_WIDTH;
+    const handleSharePx = totalHandleWidth / previewPaneCount;
+    return { widthPercent, handleSharePx };
+  }, [previewPaneCount, previewWidthFractions]);
+  const shouldAnimateSplitLayout = !paneResize.isResizing;
+  const showSinglePaneSplitPreview = !isSplitActive && splitDragDrop.dragState.isDragging && !!manager.activeSessionId;
+  const singlePanePreviewPosition = splitDragDrop.dragState.dropPosition === 0 ? 0 : 1;
+  const singlePanePreviewPaneStyle = useMemo(() => {
+    const { widthPercent, handleSharePx } = getPreviewPaneMetrics(singlePanePreviewPosition);
+    return {
+      width: `calc(${widthPercent}% - ${handleSharePx}px)`,
+      minWidth: MIN_CHAT_WIDTH_SPLIT,
+    } as React.CSSProperties;
+  }, [getPreviewPaneMetrics, singlePanePreviewPosition]);
+
+  const renderSplitPane = useCallback((
+    sessionId: string,
+    session: typeof manager.activeSession,
+    paneState: typeof manager.primaryPane,
+    displayIndex: number,
+    isActiveSessionPane: boolean,
+    previewIndex: number,
+  ) => {
+    const drawer = splitView.getDrawerState(sessionId);
+    const { widthPercent, handleSharePx } = getPreviewPaneMetrics(previewIndex);
+    const selectedPaneAgent = isActiveSessionPane
+      ? selectedAgent
+      : session?.agentId
+        ? agents.find((agent) => agent.id === session.agentId) ?? null
+        : session?.engine === "codex"
+          ? agents.find((agent) => agent.engine === "codex") ?? null
+          : null;
+
+    return (
+      <motion.div
+        layout={shouldAnimateSplitLayout}
+        transition={shouldAnimateSplitLayout
+          ? { type: "spring", stiffness: 380, damping: 34, mass: 0.65 }
+          : { duration: 0 }}
+        ref={(element) => { paneRefs.current[displayIndex] = element; }}
+        className={`chat-island island flex flex-col overflow-hidden rounded-[var(--island-radius)] bg-background ${
+          splitView.focusedSessionId === sessionId ? "ring-2 ring-primary/15" : ""
+        }`}
+        style={{
+          width: `calc(${widthPercent}% - ${handleSharePx}px)`,
+          minWidth: MIN_CHAT_WIDTH_SPLIT,
+          flexShrink: 0,
+          "--chat-fade-strength": String(chatFadeStrength),
+        } as React.CSSProperties}
+        onClick={() => splitView.setFocusedSession(sessionId)}
+      >
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 z-[5] ${isIsland ? "h-20" : "h-24"}`}
+            style={{
+              opacity: "calc(var(--chat-fade-strength, 1) * var(--chat-top-progress, 0))",
+              background: topFadeBackground,
+            }}
+          />
+          <div
+            className="chat-titlebar-bg pointer-events-none absolute inset-x-0 top-0 z-10"
+            style={{ background: titlebarSurfaceColor }}
+          >
+            <ChatHeader
+              islandLayout={isIsland}
+              sidebarOpen={displayIndex === 0 ? sidebar.isOpen : false}
+              showSidebarToggle={displayIndex === 0}
+              isProcessing={paneState.isProcessing}
+              model={paneState.sessionInfo?.model}
+              sessionId={paneState.sessionInfo?.sessionId}
+              totalCost={paneState.totalCost}
+              title={session?.title}
+              titleGenerating={session?.titleGenerating}
+              planMode={isActiveSessionPane ? settings.planMode : false}
+              permissionMode={isActiveSessionPane ? manager.sessionInfo?.permissionMode : undefined}
+              acpPermissionBehavior={isActiveSessionPane && session?.engine === "acp" ? settings.acpPermissionBehavior : undefined}
+              onToggleSidebar={displayIndex === 0 ? sidebar.toggle : () => {}}
+              showDevFill={isActiveSessionPane ? devFillEnabled : false}
+              onSeedDevExampleConversation={isActiveSessionPane ? manager.seedDevExampleConversation : undefined}
+              onSeedDevExampleSpaceData={isActiveSessionPane ? handleSeedDevExampleSpaceData : undefined}
+              onClosePane={() => {
+                void handleCloseSplitPane(sessionId);
+              }}
+            />
+          </div>
+          <ChatView
+            spaceId={spaceManager.activeSpaceId}
+            messages={paneState.messages}
+            isProcessing={paneState.isProcessing}
+            showThinking={showThinking}
+            autoGroupTools={settings.autoGroupTools}
+            avoidGroupingEdits={settings.avoidGroupingEdits}
+            autoExpandTools={settings.autoExpandTools}
+            extraBottomPadding={!!paneState.pendingPermission}
+            sessionId={sessionId}
+            onRevert={isActiveSessionPane && manager.isConnected && manager.revertFiles ? handleRevert : undefined}
+            onFullRevert={isActiveSessionPane && manager.isConnected && manager.fullRevert ? handleFullRevert : undefined}
+            onTopScrollProgress={paneScrollCallbacks[displayIndex]}
+            agents={agents}
+            selectedAgent={selectedPaneAgent}
+            onAgentChange={handleAgentChange}
+          />
+          <div
+            className={`pointer-events-none absolute inset-x-0 bottom-0 z-[5] transition-opacity duration-200 ${isIsland ? "h-24" : "h-28"}`}
+            style={{ opacity: chatFadeStrength, background: bottomFadeBackground }}
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
+            <BottomComposer
+              pendingPermission={paneState.pendingPermission}
+              onRespondPermission={paneState.engine.respondPermission}
+              onSend={wrappedHandleSend}
+              onClear={handleComposerClear}
+              onStop={handleStop}
+              isProcessing={paneState.isProcessing}
+              queuedCount={isActiveSessionPane ? manager.queuedCount : 0}
+              model={settings.model}
+              claudeEffort={settings.claudeEffort}
+              planMode={isActiveSessionPane ? settings.planMode : false}
+              permissionMode={paneState.sessionInfo?.permissionMode ?? settings.permissionMode}
+              onModelChange={handleModelChange}
+              onClaudeModelEffortChange={handleClaudeModelEffortChange}
+              onPlanModeChange={handlePlanModeChange}
+              onPermissionModeChange={handlePermissionModeChange}
+              projectPath={activeProjectPath}
+              contextUsage={paneState.contextUsage}
+              isCompacting={paneState.isCompacting}
+              onCompact={paneState.engine.compact}
+              agents={agents}
+              selectedAgent={selectedPaneAgent}
+              onAgentChange={handleAgentChange}
+              slashCommands={isActiveSessionPane ? manager.slashCommands : paneState.engine.slashCommands}
+              acpConfigOptions={isActiveSessionPane ? manager.acpConfigOptions : undefined}
+              acpConfigOptionsLoading={isActiveSessionPane ? manager.acpConfigOptionsLoading : false}
+              onACPConfigChange={isActiveSessionPane ? manager.setACPConfig : undefined}
+              acpPermissionBehavior={isActiveSessionPane ? settings.acpPermissionBehavior : undefined}
+              onAcpPermissionBehaviorChange={isActiveSessionPane ? settings.setAcpPermissionBehavior : undefined}
+              supportedModels={
+                isActiveSessionPane
+                  ? manager.supportedModels
+                  : session?.engine === "codex"
+                    ? (paneState.codex.codexModels.length > 0 ? paneState.codex.codexModels : manager.supportedModels)
+                    : session?.engine === "acp"
+                      ? []
+                      : paneState.claude.supportedModels.length > 0
+                        ? paneState.claude.supportedModels
+                        : manager.supportedModels
+              }
+              codexModelsLoadingMessage={isActiveSessionPane ? manager.codexModelsLoadingMessage : null}
+              codexEffort={isActiveSessionPane ? manager.codexEffort : undefined}
+              onCodexEffortChange={isActiveSessionPane ? manager.setCodexEffort : undefined}
+              codexModelData={isActiveSessionPane ? manager.codexRawModels : undefined}
+              grabbedElements={isActiveSessionPane ? grabbedElements : []}
+              onRemoveGrabbedElement={handleRemoveGrabbedElement}
+              lockedEngine={isActiveSessionPane ? lockedEngine : (session?.engine ?? null)}
+              lockedAgentId={isActiveSessionPane ? lockedAgentId : (session?.agentId ?? null)}
+              isIslandLayout={isIsland}
+            />
+          </div>
+        </div>
+        <PaneToolDrawer
+          open={drawer.open}
+          activeTab={drawer.activeTab}
+          height={drawer.height}
+          onToggleTab={(toolId) => splitView.toggleToolTab(sessionId, toolId)}
+          onHeightChange={(height) => splitView.setDrawerHeight(sessionId, height)}
+          availableContextual={availableContextual}
+        >
+          {drawer.activeTab === "terminal" && (
+            <ToolsPanel
+              spaceId={spaceManager.activeSpaceId}
+              tabs={activeSpaceTerminals.tabs}
+              activeTabId={activeSpaceTerminals.activeTabId}
+              terminalsReady={spaceTerminals.isReady}
+              onSetActiveTab={(tabId) => spaceTerminals.setActiveTab(spaceManager.activeSpaceId, tabId)}
+              onCreateTerminal={() => spaceTerminals.createTerminal(spaceManager.activeSpaceId, activeSpaceTerminalCwd ?? undefined)}
+              onEnsureTerminal={() => spaceTerminals.ensureTerminal(spaceManager.activeSpaceId, activeSpaceTerminalCwd ?? undefined)}
+              onCloseTerminal={(tabId) => spaceTerminals.closeTerminal(spaceManager.activeSpaceId, tabId)}
+              resolvedTheme={resolvedTheme}
+            />
+          )}
+          {drawer.activeTab === "git" && (
+            <GitPanel
+              cwd={activeSpaceProject?.path}
+              collapsedRepos={settings.collapsedRepos}
+              onToggleRepoCollapsed={settings.toggleRepoCollapsed}
+              selectedWorktreePath={activeSpaceTerminalCwd}
+              onSelectWorktreePath={handleAgentWorktreeChange}
+              activeEngine={session?.engine}
+              activeSessionId={sessionId}
+            />
+          )}
+          {drawer.activeTab === "browser" && (
+            <BrowserPanel onElementGrab={handleElementGrab} />
+          )}
+          {drawer.activeTab === "files" && (
+            <FilesPanel
+              sessionId={sessionId}
+              messages={paneState.messages}
+              cwd={activeProjectPath}
+              activeEngine={session?.engine}
+              onScrollToToolCall={setScrollToMessageId}
+              enabled={true}
+            />
+          )}
+          {drawer.activeTab === "project-files" && (
+            <ProjectFilesPanel cwd={activeProjectPath} enabled={true} onPreviewFile={handlePreviewFile} />
+          )}
+          {drawer.activeTab === "mcp" && (
+            <McpPanel
+              projectId={activeProjectId ?? null}
+              runtimeStatuses={manager.mcpServerStatuses}
+              isPreliminary={manager.mcpStatusPreliminary}
+              hasLiveSession={!manager.isDraft}
+              onRefreshStatus={manager.refreshMcpStatus}
+              onReconnect={manager.reconnectMcpServer}
+              onRestartWithServers={manager.restartWithMcpServers}
+            />
+          )}
+        </PaneToolDrawer>
+      </motion.div>
+    );
+  }, [activeProjectPath, activeSpaceProject?.path, activeSpaceTerminalCwd, activeSpaceTerminals.activeTabId, activeSpaceTerminals.tabs, agents, availableContextual, bottomFadeBackground, chatFadeStrength, devFillEnabled, getPreviewPaneMetrics, grabbedElements, handleAgentChange, handleAgentWorktreeChange, handleClaudeModelEffortChange, handleCloseSplitPane, handleComposerClear, handleElementGrab, handleFullRevert, handleModelChange, handlePermissionModeChange, handlePlanModeChange, handleRemoveGrabbedElement, handleRevert, handleSeedDevExampleSpaceData, handleStop, isIsland, lockedAgentId, lockedEngine, manager, paneScrollCallbacks, resolvedTheme, selectedAgent, settings, showThinking, shouldAnimateSplitLayout, sidebar.isOpen, sidebar.toggle, spaceManager.activeSpaceId, spaceTerminals, splitView, titlebarSurfaceColor, topFadeBackground]);
 
   const { activeTools } = settings;
   const showCodexAuthDialog =
@@ -449,6 +843,10 @@ Link: ${issue.url}`;
         onDeleteSpace={handleDeleteSpace}
         onOpenSettings={() => setShowSettings(true)}
         agents={agents}
+        onOpenInSplitView={(sessionId) => {
+          void requestAddSplitSession(sessionId);
+        }}
+        canOpenSessionInSplitView={(sessionId) => splitView.canShowSessionSplitAction(sessionId, manager.activeSessionId)}
       />
 
       <div ref={contentRef} className={`flex min-w-0 flex-1 flex-col ${settings.islandLayout ? "m-[var(--island-gap)]" : sidebar.isOpen ? "flat-divider-s" : ""} ${isResizing ? "select-none" : ""}`}>
@@ -485,12 +883,149 @@ Link: ${issue.url}`;
         {/* Keep chat area mounted (hidden) when settings is open to avoid
             destroying/recreating the entire ChatView DOM tree on toggle */}
         <div className={showSettings ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
-        {/* ── Top row: Chat | Right Panel | Tools Column | ToolPicker ── */}
-        <div className="flex min-h-0 flex-1">
-          <div
-            ref={chatIslandRef}
-            className="chat-island island relative flex flex-1 flex-col overflow-hidden rounded-[var(--island-radius)] bg-background"
-            style={{ minWidth: minChatWidth, "--chat-fade-strength": String(chatFadeStrength) } as React.CSSProperties}
+        {/* ── Top row: Split View OR (Chat | Right Panel | Tools Column | ToolPicker) ── */}
+        <div
+          ref={(element) => {
+            topRowRef.current = element;
+            if (!isSplitActive) {
+              splitContainerRef.current = element;
+            }
+          }}
+          className="relative flex min-h-0 flex-1"
+          onDragEnter={!isSplitActive ? splitDragDrop.handleDragEnter : undefined}
+          onDragOver={!isSplitActive ? splitDragDrop.handleDragOver : undefined}
+          onDragLeave={!isSplitActive ? splitDragDrop.handleDragLeave : undefined}
+          onDrop={!isSplitActive ? splitDragDrop.handleDrop : undefined}
+        >
+
+          {/* ══════ SPLIT VIEW RENDERING ══════ */}
+          {isSplitActive ? (
+            <LayoutGroup id="split-view-layout">
+              <div
+                ref={splitContainerRef}
+                className="flex min-w-0 flex-1"
+                onDragEnter={splitDragDrop.handleDragEnter}
+                onDragOver={splitDragDrop.handleDragOver}
+                onDragLeave={splitDragDrop.handleDragLeave}
+                onDrop={splitDragDrop.handleDrop}
+              >
+                {splitPaneSessionIds.map((sessionId, displayIndex) => {
+                const isActiveSessionPane = sessionId === manager.activeSessionId;
+                const ghostBeforeThisPane = previewDropPosition !== null && previewDropPosition <= displayIndex;
+                const panePreviewIndex = ghostBeforeThisPane ? displayIndex + 1 : displayIndex;
+                const dropZonePreviewIndex = previewDropPosition ?? splitPaneSessionIds.length;
+                const dropZoneMetrics = getPreviewPaneMetrics(dropZonePreviewIndex);
+                const dropZoneStyle = {
+                  width: `calc(${dropZoneMetrics.widthPercent}% - ${dropZoneMetrics.handleSharePx}px + ${SPLIT_HANDLE_WIDTH}px)`,
+                  minWidth: MIN_CHAT_WIDTH_SPLIT,
+                } as React.CSSProperties;
+
+                return (
+                  <React.Fragment key={sessionId}>
+                    {displayIndex === 0 && splitDragDrop.dragState.isDragging && splitDragDrop.dragState.dropPosition === 0 && (
+                      <SplitDropZone
+                        active={true}
+                        session={manager.sessions.find((session) => session.id === splitDragDrop.dragState.draggedSessionId)}
+                        style={dropZoneStyle}
+                      />
+                    )}
+
+                    {displayIndex > 0 && (
+                      <>
+                        {splitDragDrop.dragState.isDragging && splitDragDrop.dragState.dropPosition === displayIndex && (
+                          <SplitDropZone
+                            active={true}
+                            session={manager.sessions.find((session) => session.id === splitDragDrop.dragState.draggedSessionId)}
+                            style={dropZoneStyle}
+                          />
+                        )}
+                        <SplitHandle
+                          isIsland={isIsland}
+                          isResizing={paneResize.isResizing}
+                          onResizeStart={(event) => paneResize.handleSplitResizeStart(displayIndex - 1, event)}
+                          onDoubleClick={paneResize.handleSplitDoubleClick}
+                        />
+                      </>
+                    )}
+
+                    {isActiveSessionPane ? (
+                      renderSplitPane(
+                        sessionId,
+                        manager.activeSession,
+                        manager.primaryPane,
+                        displayIndex,
+                        true,
+                        panePreviewIndex,
+                      )
+                    ) : (
+                      <SplitPaneHost
+                        key={sessionId}
+                        sessionId={sessionId}
+                        acpPermissionBehavior={settings.acpPermissionBehavior}
+                        loadBootstrap={manager.loadSplitPaneBootstrap}
+                      >
+                        {({ session, paneState }) =>
+                          renderSplitPane(sessionId, session, paneState, displayIndex, false, panePreviewIndex)
+                        }
+                      </SplitPaneHost>
+                    )}
+
+                    {displayIndex === splitPaneSessionIds.length - 1
+                      && splitDragDrop.dragState.isDragging
+                      && splitDragDrop.dragState.dropPosition === splitPaneSessionIds.length
+                      && (
+                        <SplitDropZone
+                          active={true}
+                          session={manager.sessions.find((session) => session.id === splitDragDrop.dragState.draggedSessionId)}
+                          style={dropZoneStyle}
+                        />
+                      )}
+                  </React.Fragment>
+                );
+              })}
+              </div>
+            </LayoutGroup>
+          ) : (
+          /* ══════ NORMAL (SINGLE PANE) RENDERING ══════ */
+          <>
+          {showSinglePaneSplitPreview && singlePanePreviewPosition === 0 && (
+            <>
+              <SplitDropZone
+                active={true}
+                session={manager.sessions.find((session) => session.id === splitDragDrop.dragState.draggedSessionId)}
+                style={singlePanePreviewPaneStyle}
+              />
+              <motion.div
+                layout
+                transition={{ type: "spring", stiffness: 380, damping: 34, mass: 0.65 }}
+                className="flex w-2 shrink-0 items-center justify-center"
+                style={isIsland ? { width: "var(--island-panel-gap)" } : undefined}
+              >
+                <div className="h-10 w-0.5 rounded-full bg-foreground/18" />
+              </motion.div>
+            </>
+          )}
+
+          <motion.div
+            layout={shouldAnimateSplitLayout}
+            transition={shouldAnimateSplitLayout
+              ? { type: "spring", stiffness: 380, damping: 34, mass: 0.65 }
+              : { duration: 0 }}
+            ref={(el) => {
+              (chatIslandRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+            }}
+            className={`chat-island island relative flex min-w-0 flex-col overflow-hidden rounded-[var(--island-radius)] bg-background ${
+              showSinglePaneSplitPreview ? "shrink-0" : "flex-1"
+            }`}
+            style={(showSinglePaneSplitPreview
+              ? {
+                  ...singlePanePreviewPaneStyle,
+                  "--chat-fade-strength": String(chatFadeStrength),
+                }
+              : {
+                  minWidth: minChatWidth,
+                  "--chat-fade-strength": String(chatFadeStrength),
+                }) as React.CSSProperties}
           >
             {jiraBoardProject ? (
               <JiraBoardPanel
@@ -522,6 +1057,7 @@ Link: ${issue.url}`;
                 <ChatHeader
                   islandLayout={isIsland}
                   sidebarOpen={sidebar.isOpen}
+                  showSidebarToggle={true}
                   isProcessing={manager.isProcessing}
                   model={manager.sessionInfo?.model}
                   sessionId={manager.sessionInfo?.sessionId}
@@ -645,10 +1181,35 @@ Link: ${issue.url}`;
               />
               </>
             )}
-          </div>
+          </motion.div>
+
+          {showSinglePaneSplitPreview && singlePanePreviewPosition === 1 && (
+            <>
+              <motion.div
+                layout
+                transition={{ type: "spring", stiffness: 380, damping: 34, mass: 0.65 }}
+                className="flex w-2 shrink-0 items-center justify-center"
+                style={isIsland ? { width: "var(--island-panel-gap)" } : undefined}
+              >
+                <div className="h-10 w-0.5 rounded-full bg-foreground/18" />
+              </motion.div>
+              <SplitDropZone
+                active={true}
+                session={manager.sessions.find((session) => session.id === splitDragDrop.dragState.draggedSessionId)}
+                style={singlePanePreviewPaneStyle}
+              />
+            </>
+          )}
 
           {hasRightPanel && (
-            <>
+            <motion.div
+              layout={shouldAnimateSplitLayout}
+              transition={shouldAnimateSplitLayout
+                ? { type: "spring", stiffness: 380, damping: 34, mass: 0.65 }
+                : { duration: 0 }}
+              className={`flex shrink-0 overflow-hidden ${showSinglePaneSplitPreview ? "pointer-events-none opacity-0" : ""}`}
+              style={showSinglePaneSplitPreview ? { width: 0, minWidth: 0 } : undefined}
+            >
             {/* Resize handle — between chat and right panel */}
             <div
               className="resize-col group flex w-2 shrink-0 cursor-col-resize items-center justify-center"
@@ -720,7 +1281,7 @@ Link: ${issue.url}`;
                 );
               })()}
             </div>
-            </>
+            </motion.div>
           )}
 
           {/* Tools panels — always mounted when session active to preserve terminal/browser state.
@@ -793,7 +1354,14 @@ Link: ${issue.url}`;
             normalizedToolRatiosRef.current = sideRatios;
 
             return (
-              <>
+              <motion.div
+                layout={shouldAnimateSplitLayout}
+                transition={shouldAnimateSplitLayout
+                  ? { type: "spring", stiffness: 380, damping: 34, mass: 0.65 }
+                  : { duration: 0 }}
+                className={`flex shrink-0 overflow-hidden ${showSinglePaneSplitPreview ? "pointer-events-none opacity-0" : ""}`}
+                style={showSinglePaneSplitPreview ? { width: 0, minWidth: 0 } : undefined}
+              >
               {/* Resize handle — only visible when side tools column is showing */}
               {hasToolsColumn && (
                 <div
@@ -847,13 +1415,20 @@ Link: ${issue.url}`;
                   );
                 })}
               </div>
-              </>
+              </motion.div>
             );
           })()}
 
           {/* Tool picker — always visible */}
           {manager.activeSessionId && (
-            <div className={isIsland ? "ms-[var(--island-panel-gap)] shrink-0" : "shrink-0 tool-picker-shell"}>
+            <motion.div
+              layout={shouldAnimateSplitLayout}
+              transition={shouldAnimateSplitLayout
+                ? { type: "spring", stiffness: 380, damping: 34, mass: 0.65 }
+                : { duration: 0 }}
+              className={`${isIsland ? "ms-[var(--island-panel-gap)]" : "tool-picker-shell"} shrink-0 overflow-hidden ${showSinglePaneSplitPreview ? "pointer-events-none opacity-0" : ""}`}
+              style={showSinglePaneSplitPreview ? { width: 0, minWidth: 0, marginInlineStart: 0 } : undefined}
+            >
               <ToolPicker
                 islandLayout={isIsland}
                 transparentBackground={settings.transparentToolPicker}
@@ -872,12 +1447,14 @@ Link: ${issue.url}`;
                   total: activeTodos.length,
                 } : undefined}
               />
-            </div>
+            </motion.div>
+          )}
+          </>
           )}
         </div>{/* end top row */}
 
-        {/* ── Bottom tools row — tools placed in the bottom row via right-click menu ── */}
-        {manager.activeSessionId && (() => {
+        {/* ── Bottom tools row — tools placed in the bottom row via right-click menu (hidden in split view) ── */}
+        {!isSplitActive && manager.activeSessionId && (() => {
           // Build tool components for bottom-placed tools only.
           // Note: moving a tool between side↔bottom is an explicit user action,
           // so the unmount/remount is acceptable.

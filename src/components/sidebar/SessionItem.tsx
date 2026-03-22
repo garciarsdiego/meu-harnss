@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import {
+  Columns2,
   Pencil,
   Trash2,
   MoreHorizontal,
@@ -39,6 +40,8 @@ export function SessionItem({
   folders,
   onMoveToFolder,
   agents,
+  onOpenInSplitView,
+  canOpenInSplitView = true,
 }: {
   islandLayout: boolean;
   session: ChatSession;
@@ -53,6 +56,9 @@ export function SessionItem({
   /** Move session to a folder (null = remove from folder). */
   onMoveToFolder?: (folderId: string | null) => void;
   agents?: InstalledAgent[];
+  /** Open this session in the split view secondary pane. */
+  onOpenInSplitView?: () => void;
+  canOpenInSplitView?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(session.title);
@@ -221,6 +227,13 @@ export function SessionItem({
             )}
 
             {(onPinToggle || hasFolderMenu) && <DropdownMenuSeparator />}
+
+            {onOpenInSplitView && canOpenInSplitView && (
+              <DropdownMenuItem onClick={onOpenInSplitView}>
+                <Columns2 className="me-2 h-3.5 w-3.5" />
+                Open in Split View
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem
               onClick={() => {

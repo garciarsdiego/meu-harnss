@@ -20,6 +20,8 @@ export function BranchSection({
   onRenameFolder,
   onDeleteFolder,
   agents,
+  onOpenInSplitView,
+  canOpenSessionInSplitView,
 }: {
   branchName: string;
   children: SidebarItem[];
@@ -35,6 +37,8 @@ export function BranchSection({
   onRenameFolder: (projectId: string, folderId: string, name: string) => void;
   onDeleteFolder: (projectId: string, folderId: string) => void;
   agents?: InstalledAgent[];
+  onOpenInSplitView?: (sessionId: string) => void;
+  canOpenSessionInSplitView?: (sessionId: string) => boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -76,6 +80,8 @@ export function BranchSection({
                   onRenameFolder={(name) => onRenameFolder(item.folder!.projectId, item.folder!.id, name)}
                   onDeleteFolder={() => onDeleteFolder(item.folder!.projectId, item.folder!.id)}
                   agents={agents}
+                  onOpenInSplitView={onOpenInSplitView}
+                  canOpenSessionInSplitView={canOpenSessionInSplitView}
                 />
               );
             }
@@ -93,6 +99,8 @@ export function BranchSection({
                   folders={allFolders}
                   onMoveToFolder={(folderId) => onMoveSessionToFolder(item.session!.id, folderId)}
                   agents={agents}
+                  onOpenInSplitView={onOpenInSplitView ? () => onOpenInSplitView(item.session!.id) : undefined}
+                  canOpenInSplitView={canOpenSessionInSplitView?.(item.session!.id) ?? true}
                 />
               );
             }

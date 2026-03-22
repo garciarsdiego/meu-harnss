@@ -45,6 +45,16 @@ export interface QueuedMessage {
   messageId: string;
 }
 
+export interface SessionPaneBootstrap {
+  session: ChatSession;
+  initialMessages: UIMessage[];
+  initialMeta: InitialMeta | null;
+  initialPermission: PermissionRequest | null;
+  initialConfigOptions: ACPConfigOption[];
+  initialSlashCommands: SlashCommand[];
+  initialRawAcpPermission: ACPPermissionEvent | null;
+}
+
 /** Shared refs that multiple sub-hooks need to read/write */
 export interface SharedSessionRefs {
   activeSessionIdRef: React.MutableRefObject<string | null>;
@@ -79,6 +89,8 @@ export interface SharedSessionRefs {
   acpPermissionBehaviorRef: React.MutableRefObject<AcpPermissionBehavior>;
   /** Current git branch for the active project — set by the orchestrator. */
   currentBranchRef: React.MutableRefObject<string | undefined>;
+  /** Split view: session IDs currently visible in extra panes. */
+  visibleSplitSessionIdsRef: React.MutableRefObject<readonly string[]>;
 }
 
 /** State setters from the orchestrator that sub-hooks need */

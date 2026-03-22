@@ -50,6 +50,7 @@ export function useSessionPersistence({
     switchSessionRef,
     acpPermissionBehaviorRef,
     saveTimerRef,
+    visibleSplitSessionIdsRef,
   } = refs;
 
   // Persist session with Codex thread ID fallback
@@ -178,6 +179,8 @@ export function useSessionPersistence({
       const sid = event._sessionId;
       if (!sid) return;
       if (sid === activeSessionIdRef.current) return;
+      // Split view: secondary pane's engine hooks handle their own events
+      if (visibleSplitSessionIdsRef.current.includes(sid)) return;
 
       // Pre-started session: route to background store AND extract MCP statuses
       if (sid === preStartedSessionIdRef.current) {
@@ -200,6 +203,7 @@ export function useSessionPersistence({
       const sid = event._sessionId;
       if (!sid) return;
       if (sid === activeSessionIdRef.current) return;
+      if (visibleSplitSessionIdsRef.current.includes(sid)) return;
       if (sid === draftAcpSessionIdRef.current) return;
       backgroundStoreRef.current.handleACPEvent(event);
     });
@@ -207,7 +211,7 @@ export function useSessionPersistence({
     // Route permission requests for non-active Claude sessions to the background store
     const unsubBgPerm = window.claude.onPermissionRequest((data) => {
       const sid = data._sessionId;
-      if (!sid || sid === activeSessionIdRef.current || sid === preStartedSessionIdRef.current) return;
+      if (!sid || sid === activeSessionIdRef.current || visibleSplitSessionIdsRef.current.includes(sid) || sid === preStartedSessionIdRef.current) return;
       backgroundStoreRef.current.setPermission(sid, {
         requestId: data.requestId,
         toolName: data.toolName,
@@ -222,7 +226,7 @@ export function useSessionPersistence({
     // (auto-respond if the client-side permission behavior allows it)
     const unsubBgAcpPerm = window.claude.acp.onPermissionRequest((data: ACPPermissionEvent) => {
       const sid = data._sessionId;
-      if (!sid || sid === activeSessionIdRef.current) return;
+      if (!sid || sid === activeSessionIdRef.current || visibleSplitSessionIdsRef.current.includes(sid)) return;
       if (sid === draftAcpSessionIdRef.current) return;
 
       // Auto-respond for background ACP sessions when behavior is configured
@@ -248,21 +252,21 @@ export function useSessionPersistence({
     // (clears isProcessing so the session doesn't appear stuck when switching back)
     const unsubBgAcpTurn = window.claude.acp.onTurnComplete((data: ACPTurnCompleteEvent) => {
       const sid = data._sessionId;
-      if (!sid || sid === activeSessionIdRef.current) return;
+      if (!sid || sid === activeSessionIdRef.current || visibleSplitSessionIdsRef.current.includes(sid)) return;
       backgroundStoreRef.current.handleACPTurnComplete(sid);
     });
 
     // Route Codex events for non-active sessions to the background store
     const unsubCodex = window.claude.codex.onEvent((event) => {
       const sid = event._sessionId;
-      if (!sid || sid === activeSessionIdRef.current) return;
+      if (!sid || sid === activeSessionIdRef.current || visibleSplitSessionIdsRef.current.includes(sid)) return;
       backgroundStoreRef.current.handleCodexEvent(event);
     });
 
     // Route Codex approval requests for non-active sessions — auto-decline for now
     const unsubCodexApproval = window.claude.codex.onApprovalRequest((data) => {
       const sid = data._sessionId;
-      if (!sid || sid === activeSessionIdRef.current) return;
+      if (!sid || sid === activeSessionIdRef.current || visibleSplitSessionIdsRef.current.includes(sid)) return;
       if (data.method === "item/tool/requestUserInput") {
         backgroundStoreRef.current.setPermission(sid, {
           requestId: String(data.rpcId),

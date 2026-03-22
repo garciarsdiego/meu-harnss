@@ -20,6 +20,7 @@ export function toChatSession(
     folderId: session.folderId,
     pinned: session.pinned,
     branch: session.branch,
+    agentId: session.agentId,
   };
 }
 

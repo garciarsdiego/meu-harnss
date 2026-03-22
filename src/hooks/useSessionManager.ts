@@ -3,9 +3,6 @@ import type { ChatSession, UIMessage, PermissionRequest, McpServerStatus, McpSer
 import type { ACPConfigOption, ACPPermissionEvent } from "../types/acp";
 import { toMcpStatusState } from "../lib/mcp-utils";
 import { toChatSession } from "../lib/session-records";
-import { useClaude } from "./useClaude";
-import { useACP } from "./useACP";
-import { useCodex } from "./useCodex";
 import { BackgroundSessionStore } from "../lib/background-session-store";
 import {
   DRAFT_ID,
@@ -13,17 +10,25 @@ import {
   type CodexModelSummary,
   type InitialMeta,
   type QueuedMessage,
+  type SessionPaneBootstrap,
   type SharedSessionRefs,
   type SharedSessionSetters,
   type EngineHooks,
 } from "./session/types";
+import { useSessionPane, type SessionPaneState } from "./session/useSessionPane";
 import { useMessageQueue } from "./session/useMessageQueue";
 import { useSessionPersistence } from "./session/useSessionPersistence";
 import { useDraftMaterialization } from "./session/useDraftMaterialization";
 import { useSessionRevival } from "./session/useSessionRevival";
 import { useSessionLifecycle } from "./session/useSessionLifecycle";
 
-export function useSessionManager(projects: Project[], acpPermissionBehavior: AcpPermissionBehavior = "ask", onSpaceChange?: (spaceId: string) => void) {
+export function useSessionManager(
+  projects: Project[],
+  acpPermissionBehavior: AcpPermissionBehavior = "ask",
+  onSpaceChange?: (spaceId: string) => void,
+  /** Session IDs currently visible in extra split panes. */
+  visibleSplitSessionIds: readonly string[] = [],
+) {
   // ── Core state ──
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -44,6 +49,11 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
   const [codexRawModels, setCodexRawModels] = useState<CodexModelSummary[]>([]);
   const [codexModelsLoadingMessage, setCodexModelsLoadingMessage] = useState<string | null>(null);
   const [queuedCount, setQueuedCount] = useState(0);
+
+  // ── Refs needed by extra pane loaders (declared early) ──
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+  const backgroundStoreRef = useRef(new BackgroundSessionStore());
 
   // ── Determine active engine ──
   const activeEngine: EngineId = activeSessionId === DRAFT_ID
@@ -66,30 +76,26 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
       : !!sessions.find((s) => s.id === activeSessionId)?.planMode)
     : false;
 
-  // ── Engine hooks ──
-  const claude = useClaude({ sessionId: claudeSessionId, initialMessages: activeEngine === "claude" ? initialMessages : [], initialMeta: activeEngine === "claude" ? initialMeta : null, initialPermission: activeEngine === "claude" ? initialPermission : null });
-  const acp = useACP({
-    sessionId: acpSessionId,
-    initialMessages: isACP ? initialMessages : [],
-    initialConfigOptions: isACP ? initialConfigOptions : undefined,
-    initialSlashCommands: isACP ? initialSlashCommands : undefined,
-    initialMeta: isACP ? initialMeta : null,
-    initialPermission: isACP ? initialPermission : null,
-    initialRawAcpPermission: isACP ? initialRawAcpPermission : null,
+  // ── Primary session pane (wraps all three engine hooks) ──
+  const primaryPane = useSessionPane({
+    activeSessionId,
+    activeEngine,
+    claudeSessionId,
+    acpSessionId,
+    codexSessionId,
+    codexSessionModel,
+    codexPlanModeEnabled,
+    initialMessages,
+    initialMeta,
+    initialPermission,
+    initialConfigOptions,
+    initialSlashCommands,
+    initialRawAcpPermission,
     acpPermissionBehavior,
   });
-  const codex = useCodex({
-    sessionId: codexSessionId,
-    sessionModel: codexSessionModel,
-    planModeEnabled: codexPlanModeEnabled,
-    initialMessages: isCodex ? initialMessages : [],
-    initialMeta: isCodex ? initialMeta : null,
-    initialPermission: isCodex ? initialPermission : null,
-  });
 
-  // Pick the active engine's state
-  const engine = isCodex ? codex : isACP ? acp : claude;
-  const { messages, totalCost, contextUsage } = engine;
+  const { claude, acp, codex, engine } = primaryPane;
+  const { messages, totalCost, contextUsage } = primaryPane;
 
   // ── All refs (21+) — kept for stale-closure avoidance ──
   const liveSessionIdsRef = useRef<Set<string>>(new Set());
@@ -101,8 +107,7 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
   contextUsageRef.current = contextUsage;
   const activeSessionIdRef = useRef(activeSessionId);
   activeSessionIdRef.current = activeSessionId;
-  const sessionsRef = useRef(sessions);
-  sessionsRef.current = sessions;
+  // sessionsRef declared above (near extra pane loaders)
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
   const draftProjectIdRef = useRef(draftProjectId);
@@ -119,6 +124,9 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
   sessionInfoRef.current = engine.sessionInfo;
   const pendingPermissionRef = useRef(engine.pendingPermission);
   pendingPermissionRef.current = engine.pendingPermission;
+  // Split view: track visible split-pane session IDs for IPC routing gate
+  const visibleSplitSessionIdsRef = useRef<readonly string[]>(visibleSplitSessionIds);
+  visibleSplitSessionIdsRef.current = visibleSplitSessionIds;
   // Prevent cross-session bleed: skip the first lastMessageAt sync after switching chats.
   const lastMessageSyncSessionRef = useRef<string | null>(null);
   const preStartedSessionIdRef = useRef<string | null>(null);
@@ -146,7 +154,7 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
   // Stable ref for space switching — avoids adding onSpaceChange as a useCallback dependency
   const onSpaceChangeRef = useRef(onSpaceChange);
   onSpaceChangeRef.current = onSpaceChange;
-  const backgroundStoreRef = useRef(new BackgroundSessionStore());
+  // backgroundStoreRef declared above (near extra pane loaders)
 
   // ── Codex effort helpers (kept in orchestrator — too small to extract) ──
   const setCodexEffortFromUser = useCallback((effort: string) => {
@@ -206,6 +214,7 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
     onSpaceChangeRef,
     acpPermissionBehaviorRef,
     currentBranchRef,
+    visibleSplitSessionIdsRef,
   };
 
   const setters: SharedSessionSetters = {
@@ -362,8 +371,57 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
     currentBranchRef.current = branch;
   }, []);
 
-  // ── Return (identical interface to original) ──
+  const loadSplitPaneBootstrap = useCallback(async (sessionId: string): Promise<SessionPaneBootstrap | null> => {
+    const session = sessionsRef.current.find((entry) => entry.id === sessionId);
+    if (!session) {
+      return null;
+    }
+
+    const backgroundState = backgroundStoreRef.current.get(sessionId);
+    if (backgroundState) {
+      return {
+        session,
+        initialMessages: backgroundState.messages,
+        initialMeta: {
+          isProcessing: backgroundState.isProcessing,
+          isConnected: backgroundState.isConnected,
+          sessionInfo: backgroundState.sessionInfo,
+          totalCost: backgroundState.totalCost,
+          contextUsage: backgroundState.contextUsage,
+          isCompacting: backgroundState.isCompacting,
+        },
+        initialPermission: backgroundState.pendingPermission,
+        initialConfigOptions: [],
+        initialSlashCommands: backgroundState.slashCommands ?? [],
+        initialRawAcpPermission: backgroundState.rawAcpPermission,
+      };
+    }
+
+    const persistedSession = await window.claude.sessions.load(session.projectId, sessionId);
+    if (!persistedSession) {
+      return null;
+    }
+
+    return {
+      session,
+      initialMessages: persistedSession.messages ?? [],
+      initialMeta: {
+        isProcessing: false,
+        isConnected: false,
+        sessionInfo: null,
+        totalCost: persistedSession.totalCost ?? 0,
+        contextUsage: persistedSession.contextUsage ?? null,
+      },
+      initialPermission: null,
+      initialConfigOptions: [],
+      initialSlashCommands: [],
+      initialRawAcpPermission: null,
+    };
+  }, []);
+
+  // ── Return ──
   return {
+    primaryPane,
     sessions,
     setSessions,
     activeSessionId,
@@ -396,6 +454,7 @@ export function useSessionManager(projects: Project[], acpPermissionBehavior: Ac
     sendNextId,
     seedDevExampleConversation,
     refreshSessions,
+    loadSplitPaneBootstrap,
     queuedCount,
     stop: engine.stop,
     interrupt: async () => {

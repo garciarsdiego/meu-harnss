@@ -72,6 +72,8 @@ export function ProjectSection({
   onPinFolder,
   onSetOrganizeByChatBranch,
   agents,
+  onOpenInSplitView,
+  canOpenSessionInSplitView,
 }: {
   islandLayout: boolean;
   project: Project;
@@ -102,6 +104,8 @@ export function ProjectSection({
   onPinFolder: (projectId: string, folderId: string, pinned: boolean) => void;
   onSetOrganizeByChatBranch: (on: boolean) => void;
   agents?: InstalledAgent[];
+  onOpenInSplitView?: (sessionId: string) => void;
+  canOpenSessionInSplitView?: (sessionId: string) => boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -195,6 +199,8 @@ export function ProjectSection({
           onRenameFolder={(name) => onRenameFolder(project.id, item.folder!.id, name)}
           onDeleteFolder={() => onDeleteFolder(project.id, item.folder!.id)}
           agents={agents}
+          onOpenInSplitView={onOpenInSplitView}
+          canOpenSessionInSplitView={canOpenSessionInSplitView}
         />
       );
     }
@@ -217,6 +223,8 @@ export function ProjectSection({
           onRenameFolder={onRenameFolder}
           onDeleteFolder={onDeleteFolder}
           agents={agents}
+          onOpenInSplitView={onOpenInSplitView}
+          canOpenSessionInSplitView={canOpenSessionInSplitView}
         />
       );
     }
@@ -235,6 +243,8 @@ export function ProjectSection({
           folders={folders}
           onMoveToFolder={(folderId) => onMoveSessionToFolder(item.session!.id, folderId)}
           agents={agents}
+          onOpenInSplitView={onOpenInSplitView ? () => onOpenInSplitView(item.session!.id) : undefined}
+          canOpenInSplitView={canOpenSessionInSplitView?.(item.session!.id) ?? true}
         />
       );
     }
@@ -466,6 +476,8 @@ export function ProjectSection({
               onRenameFolder={onRenameFolder}
               onDeleteFolder={onDeleteFolder}
               agents={agents}
+              onOpenInSplitView={onOpenInSplitView}
+              canOpenSessionInSplitView={canOpenSessionInSplitView}
             />
           )}
 

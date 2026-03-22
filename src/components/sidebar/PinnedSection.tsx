@@ -18,6 +18,8 @@ export function PinnedSection({
   onRenameFolder,
   onDeleteFolder,
   agents,
+  onOpenInSplitView,
+  canOpenSessionInSplitView,
 }: {
   sessions: ChatSession[];
   pinnedFolders?: SidebarItem[];
@@ -33,6 +35,8 @@ export function PinnedSection({
   onRenameFolder: (projectId: string, folderId: string, name: string) => void;
   onDeleteFolder: (projectId: string, folderId: string) => void;
   agents?: InstalledAgent[];
+  onOpenInSplitView?: (sessionId: string) => void;
+  canOpenSessionInSplitView?: (sessionId: string) => boolean;
 }) {
   if (sessions.length === 0 && (!pinnedFolders || pinnedFolders.length === 0)) return null;
 
@@ -55,6 +59,8 @@ export function PinnedSection({
           onRenameFolder={(name) => onRenameFolder(item.folder!.projectId, item.folder!.id, name)}
           onDeleteFolder={() => onDeleteFolder(item.folder!.projectId, item.folder!.id)}
           agents={agents}
+          onOpenInSplitView={onOpenInSplitView}
+          canOpenSessionInSplitView={canOpenSessionInSplitView}
         />
       ))}
       {sessions.map((session) => (
@@ -70,6 +76,8 @@ export function PinnedSection({
           folders={folders}
           onMoveToFolder={(folderId) => onMoveSessionToFolder(session.id, folderId)}
           agents={agents}
+          onOpenInSplitView={onOpenInSplitView ? () => onOpenInSplitView(session.id) : undefined}
+          canOpenInSplitView={canOpenSessionInSplitView?.(session.id) ?? true}
         />
       ))}
     </div>
