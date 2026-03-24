@@ -22,6 +22,8 @@ import { NotificationsSettings } from "@/components/settings/NotificationsSettin
 import { McpSettings } from "@/components/settings/McpSettings";
 import { AdvancedSettings } from "@/components/settings/AdvancedSettings";
 import { PlaceholderSection } from "@/components/settings/PlaceholderSection";
+import { SkillsPanel } from "../../renderer/src/features/pal/SkillsPanel";
+import { AgentConfigSection } from "../../renderer/src/features/pal/AgentConfigSection";
 import { AboutSettings } from "@/components/settings/AboutSettings";
 import { AnalyticsSettings } from "@/components/settings/AnalyticsSettings";
 import { isMac } from "@/lib/utils";
@@ -48,8 +50,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: "agents", label: "ACP Agents", icon: Bot },
   { id: "mcp", label: "MCP Servers", icon: Plug },
   { id: "engines", label: "Engines", icon: Cpu },
-  { id: "skills", label: "Skills", icon: Sparkles, comingSoon: true },
-  { id: "custom-agents", label: "Agents", icon: Users, comingSoon: true },
+  { id: "skills", label: "Skills", icon: Sparkles },
+  { id: "custom-agents", label: "Agents", icon: Users },
   { id: "advanced", label: "Advanced", icon: Wrench },
   { id: "about", label: "About", icon: Info },
 ];
@@ -213,23 +215,9 @@ export const SettingsView = memo(function SettingsView({
           />
         );
       case "skills":
-        return (
-          <PlaceholderSection
-            title="Skills"
-            description="Create, install, and manage agent skills that extend what your AI coding agents can do."
-            icon={Sparkles}
-            comingSoon
-          />
-        );
+        return <SkillsPanel />;
       case "custom-agents":
-        return (
-          <PlaceholderSection
-            title="Agents"
-            description="Build and configure custom agents with specialized tools, prompts, and workflows."
-            icon={Users}
-            comingSoon
-          />
-        );
+        return <AgentConfigSection />;
       case "about":
         return <AboutSettings />;
       default:
