@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { ChevronDown, Info, Loader2, PanelLeft } from "lucide-react";
+import { PalStatusBadge } from "../../renderer/src/features/pal/PalStatusBadge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -139,8 +140,9 @@ export const ChatHeader = memo(function ChatHeader({
       ) : null}
 
       {/* Session info — subtle icon, hover reveals model / permissions / cost / session ID */}
-      {(showDevSeedButton || hasDetails) && (
-        <div className="ms-auto flex items-center gap-1.5">
+      <div className="ms-auto flex items-center gap-1.5">
+        <PalStatusBadge />
+        {(showDevSeedButton || hasDetails) && (<>
           {showDevSeedButton && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -182,8 +184,8 @@ export const ChatHeader = memo(function ChatHeader({
               </TooltipContent>
             </Tooltip>
           )}
-        </div>
-      )}
+        </>)}
+      </div>
     </div>
   );
 });

@@ -1,13 +1,17 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import type { Skill } from "../../../../shared/types/pal";
 import { useSkills } from "./hooks/useSkills";
-import { Skill } from "../../../../shared/types/pal";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "../../components/ui/command";
-import { Badge } from "../../components/ui/badge";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
-import { Textarea } from "../../components/ui/textarea";
+import { Button } from "../../../../src/components/ui/button";
+import { Badge } from "../../../../src/components/ui/badge";
+import { Input } from "../../../../src/components/ui/input";
+import { Label } from "../../../../src/components/ui/label";
+import { Textarea } from "../../../../src/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../../../src/components/ui/dialog";
 
 interface SkillsPickerProps {
   open: boolean;
@@ -19,107 +23,135 @@ export function SkillsPicker({ open, onApply, onClose }: SkillsPickerProps) {
   const { skills, apply } = useSkills();
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase();
+    return skills.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q) ||
+        s.category.toLowerCase().includes(q),
+    );
+  }, [skills, query]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
-    skills.forEach((s) => cats.add(s.category));
+    filtered.forEach((s) => cats.add(s.category));
     return Array.from(cats);
-  }, [skills]);
+  }, [filtered]);
 
-  const handleSelectSkill = (skill: Skill) => {
+  function handleSelectSkill(skill: Skill) {
     if (skill.variables && skill.variables.length > 0) {
       setSelectedSkill(skill);
-      const initialVars: Record<string, string> = {};
-      skill.variables.forEach((v) => {
-        initialVars[v.name] = (v.default as string) || "";
-      });
-      setVariables(initialVars);
+      const init: Record<string, string> = {};
+      skill.variables.forEach((v) => { init[v.name] = (v.default as string) ?? ""; });
+      setVariables(init);
     } else {
-      apply(skill.id, {}).then((result) => {
+      void apply(skill.id, {}).then((result) => {
         onApply(result);
-        onClose();
+        handleClose();
       });
     }
-  };
+  }
 
-  const handleApply = async () => {
+  async function handleApply() {
     if (!selectedSkill) return;
     const result = await apply(selectedSkill.id, variables);
     onApply(result);
-    onClose();
-    setSelectedSkill(null);
-    setVariables({});
-  };
+    handleClose();
+  }
 
-  const handleClose = () => {
+  function handleClose() {
     setSelectedSkill(null);
     setVariables({});
+    setQuery("");
     onClose();
-  };
+  }
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{selectedSkill ? `Fill Variables: ${selectedSkill.name}` : "Select a Skill"}</DialogTitle>
+          <DialogTitle>
+            {selectedSkill ? `Preencher: ${selectedSkill.name}` : "Selecionar Skill"}
+          </DialogTitle>
         </DialogHeader>
 
         {!selectedSkill ? (
-          <Command>
-            <CommandInput placeholder="Search skills..." />
-            <CommandList>
-              <CommandEmpty>No skills found.</CommandEmpty>
+          <div className="flex flex-col gap-3">
+            <Input
+              placeholder="Buscar skills..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+            />
+            <div className="max-h-64 overflow-y-auto space-y-3">
+              {filtered.length === 0 && (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Nenhuma skill encontrada.
+                </p>
+              )}
               {categories.map((cat) => (
-                <CommandGroup key={cat} heading={cat}>
-                  {skills
+                <div key={cat}>
+                  <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    {cat}
+                  </p>
+                  {filtered
                     .filter((s) => s.category === cat)
                     .map((skill) => (
-                      <CommandItem
+                      <button
                         key={skill.id}
-                        onSelect={() => handleSelectSkill(skill)}
-                        className="flex flex-col items-start gap-1 py-2 cursor-pointer"
+                        onClick={() => handleSelectSkill(skill)}
+                        className="w-full text-left rounded-md px-3 py-2 hover:bg-muted/60 flex flex-col gap-0.5 transition-colors"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold">{skill.name}</span>
-                          <Badge variant="outline">{skill.category}</Badge>
+                          <span className="text-sm font-medium">{skill.name}</span>
+                          <Badge variant="outline" className="text-[10px]">{skill.category}</Badge>
                         </div>
-                        <span className="text-sm text-muted-foreground">{skill.description}</span>
-                      </CommandItem>
+                        <span className="text-xs text-muted-foreground">{skill.description}</span>
+                      </button>
                     ))}
-                </CommandGroup>
+                </div>
               ))}
-            </CommandList>
-          </Command>
+            </div>
+          </div>
         ) : (
           <div className="flex flex-col gap-4">
             {selectedSkill.variables.map((variable) => (
               <div key={variable.name} className="flex flex-col gap-2">
                 <Label htmlFor={variable.name}>
-                  {variable.name} {variable.required && <span className="text-red-500">*</span>}
+                  {variable.name}
+                  {variable.required && <span className="text-red-500 ml-0.5">*</span>}
                 </Label>
-                {variable.name.toLowerCase() === "code" || variable.name.toLowerCase() === "context" ? (
+                {variable.name.toLowerCase() === "code" ||
+                variable.name.toLowerCase() === "context" ? (
                   <Textarea
                     id={variable.name}
-                    value={variables[variable.name] || ""}
-                    onChange={(e) => setVariables({ ...variables, [variable.name]: e.target.value })}
-                    placeholder={variable.description || `Enter ${variable.name}...`}
+                    value={variables[variable.name] ?? ""}
+                    onChange={(e) =>
+                      setVariables({ ...variables, [variable.name]: e.target.value })
+                    }
+                    placeholder={variable.description ?? `Enter ${variable.name}...`}
                     rows={4}
                   />
                 ) : (
                   <Input
                     id={variable.name}
-                    value={variables[variable.name] || ""}
-                    onChange={(e) => setVariables({ ...variables, [variable.name]: e.target.value })}
-                    placeholder={variable.description || `Enter ${variable.name}...`}
+                    value={variables[variable.name] ?? ""}
+                    onChange={(e) =>
+                      setVariables({ ...variables, [variable.name]: e.target.value })
+                    }
+                    placeholder={variable.description ?? `Enter ${variable.name}...`}
                   />
                 )}
               </div>
             ))}
-            <div className="flex justify-end gap-2 mt-4">
+            <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setSelectedSkill(null)}>
-                Back
+                Voltar
               </Button>
-              <Button onClick={handleApply}>Apply</Button>
+              <Button onClick={() => void handleApply()}>Aplicar</Button>
             </div>
           </div>
         )}

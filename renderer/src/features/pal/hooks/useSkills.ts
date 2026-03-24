@@ -17,8 +17,7 @@ export function useSkills(): UseSkillsResult {
   const fetchSkills = useCallback(async () => {
     setLoading(true);
     try {
-      // @ts-expect-error - ipcRenderer injected via preload
-      const data: Skill[] = await window.ipcRenderer.invoke("mh:skills:list");
+      const data: Skill[] = await window.ipc.invoke<Skill[]>("mh:skills:list");
       setSkills(data);
     } catch (err) {
       console.error("Failed to fetch skills", err);
@@ -32,21 +31,18 @@ export function useSkills(): UseSkillsResult {
   }, [fetchSkills]);
 
   const save = async (data: Omit<Skill, "id" | "createdAt" | "updatedAt" | "schemaVersion"> & { id?: string }): Promise<Skill> => {
-    // @ts-expect-error
-    const result: Skill = await window.ipcRenderer.invoke("mh:skills:save", data);
+    const result: Skill = await window.ipc.invoke<Skill>("mh:skills:save", data);
     await fetchSkills();
     return result;
   };
 
   const remove = async (id: string): Promise<void> => {
-    // @ts-expect-error
-    await window.ipcRenderer.invoke("mh:skills:delete", id);
+    await window.ipc.invoke("mh:skills:delete", id);
     await fetchSkills();
   };
 
   const apply = async (skillId: string, variables: Record<string, string>): Promise<string> => {
-    // @ts-expect-error
-    return (await window.ipcRenderer.invoke("mh:skills:apply", { skillId, variables })) as string;
+    return await window.ipc.invoke<string>("mh:skills:apply", { skillId, variables });
   };
 
   const builtins = skills.filter((s) => s.isBuiltin);

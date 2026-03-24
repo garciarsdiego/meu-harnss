@@ -1,153 +1,178 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import type { Skill, SkillVariable } from "../../../../shared/types/pal";
 import { useSkills } from "./hooks/useSkills";
-import { Skill, SkillVariable } from "../../../../shared/types/pal";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
-import { Textarea } from "../../components/ui/textarea";
-import { Badge } from "../../components/ui/badge";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../../components/ui/card";
-import { Lock, Trash, Edit, Plus, X } from "lucide-react";
+import { Button } from "../../../../src/components/ui/button";
+import { Input } from "../../../../src/components/ui/input";
+import { Label } from "../../../../src/components/ui/label";
+import { Textarea } from "../../../../src/components/ui/textarea";
+import { Badge } from "../../../../src/components/ui/badge";
+import { Lock, Trash2, Pencil, Plus, X } from "lucide-react";
 
 export function SkillsPanel() {
   const { skills, save, remove } = useSkills();
   const [editingSkill, setEditingSkill] = useState<Partial<Skill> | null>(null);
 
-  const handleSave = async () => {
+  async function handleSave() {
     if (!editingSkill?.name || !editingSkill?.template) return;
-    
     await save({
       id: editingSkill.id,
       name: editingSkill.name,
-      category: editingSkill.category || "Custom",
-      description: editingSkill.description || "",
+      category: editingSkill.category ?? "Custom",
+      description: editingSkill.description ?? "",
       template: editingSkill.template,
-      variables: editingSkill.variables || [],
-      isBuiltin: false
+      variables: editingSkill.variables ?? [],
+      isBuiltin: false,
     });
     setEditingSkill(null);
-  };
+  }
 
-  const handleAddVariable = () => {
-    if (!editingSkill) return;
-    const newVars = [...(editingSkill.variables || []), { name: "", type: "string" as const, required: true }];
-    setEditingSkill({ ...editingSkill, variables: newVars });
-  };
+  function addVariable() {
+    const v: SkillVariable = { name: "", type: "string", required: false };
+    setEditingSkill((prev) => ({
+      ...prev,
+      variables: [...(prev?.variables ?? []), v],
+    }));
+  }
 
-  const handleUpdateVariable = (index: number, field: keyof SkillVariable, value: string | boolean) => {
-    if (!editingSkill?.variables) return;
-    const newVars = [...editingSkill.variables];
-    newVars[index] = { ...newVars[index], [field]: value };
-    setEditingSkill({ ...editingSkill, variables: newVars });
-  };
+  function updateVariable(index: number, field: keyof SkillVariable, value: string | boolean) {
+    setEditingSkill((prev) => {
+      const vars = [...(prev?.variables ?? [])];
+      vars[index] = { ...vars[index], [field]: value };
+      return { ...prev, variables: vars };
+    });
+  }
 
-  const handleRemoveVariable = (index: number) => {
-    if (!editingSkill?.variables) return;
-    const newVars = editingSkill.variables.filter((_, i) => i !== index);
-    setEditingSkill({ ...editingSkill, variables: newVars });
-  };
+  function removeVariable(index: number) {
+    setEditingSkill((prev) => {
+      const vars = (prev?.variables ?? []).filter((_, i) => i !== index);
+      return { ...prev, variables: vars };
+    });
+  }
 
   return (
-    <div className="flex h-full gap-6 p-6">
-      <div className="flex-1 flex flex-col gap-4 overflow-y-auto">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Skills Management</h2>
-          <Button onClick={() => setEditingSkill({ name: "", category: "Custom", description: "", template: "", variables: [] })}>
-            <Plus className="w-4 h-4 mr-2" /> New Skill
-          </Button>
-        </div>
-
-        <div className="grid gap-4">
-          {skills.map((skill) => (
-            <Card key={skill.id}>
-              <CardHeader className="flex flex-row justify-between items-start space-y-0 pb-2">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    {skill.name}
-                    {skill.isBuiltin && <Lock className="w-4 h-4 text-muted-foreground" />}
-                  </CardTitle>
-                  <CardDescription className="mt-1">{skill.description}</CardDescription>
-                </div>
-                <Badge variant="secondary">{skill.category}</Badge>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm font-mono bg-muted p-2 rounded-md truncate">
-                  {skill.template.length > 60 ? skill.template.slice(0, 60) + "..." : skill.template}
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end gap-2">
-                {!skill.isBuiltin && (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => setEditingSkill(skill)}>
-                      <Edit className="w-4 h-4 mr-2" /> Edit
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => remove(skill.id)}>
-                      <Trash className="w-4 h-4 mr-2" /> Delete
-                    </Button>
-                  </>
-                )}
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+    <div className="flex flex-col gap-4 p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Skills</h3>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            setEditingSkill({ name: "", category: "Custom", description: "", template: "", variables: [] })
+          }
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Nova Skill
+        </Button>
       </div>
 
+      {/* Edit form */}
       {editingSkill && (
-        <Card className="w-1/3 flex flex-col">
-          <CardHeader>
-            <CardTitle>{editingSkill.id ? "Edit Skill" : "New Skill"}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col gap-4 overflow-y-auto">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={editingSkill.name || ""} onChange={(e) => setEditingSkill({ ...editingSkill, name: e.target.value })} />
+        <div className="rounded-lg border border-border p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">
+              {editingSkill.id ? "Editar Skill" : "Nova Skill"}
+            </span>
+            <button onClick={() => setEditingSkill(null)} className="text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            <Label>Nome</Label>
+            <Input
+              value={editingSkill.name ?? ""}
+              onChange={(e) => setEditingSkill((p) => ({ ...p, name: e.target.value }))}
+              placeholder="Nome da skill"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Categoria</Label>
+            <Input
+              value={editingSkill.category ?? "Custom"}
+              onChange={(e) => setEditingSkill((p) => ({ ...p, category: e.target.value }))}
+              placeholder="Custom"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Descrição</Label>
+            <Input
+              value={editingSkill.description ?? ""}
+              onChange={(e) => setEditingSkill((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Descrição curta"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Template</Label>
+            <Textarea
+              value={editingSkill.template ?? ""}
+              onChange={(e) => setEditingSkill((p) => ({ ...p, template: e.target.value }))}
+              placeholder="Use {{variable}} para variáveis dinâmicas"
+              rows={4}
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Variáveis</Label>
+              <Button size="sm" variant="ghost" onClick={addVariable}>
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Input value={editingSkill.category || ""} onChange={(e) => setEditingSkill({ ...editingSkill, category: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Input value={editingSkill.description || ""} onChange={(e) => setEditingSkill({ ...editingSkill, description: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Template (Use {"{{var}}"} for variables)</Label>
-              <Textarea 
-                rows={6} 
-                value={editingSkill.template || ""} 
-                onChange={(e) => setEditingSkill({ ...editingSkill, template: e.target.value })} 
-              />
-            </div>
-            
-            <div className="space-y-3 pt-2 border-t">
-              <div className="flex justify-between items-center">
-                <Label>Variables</Label>
-                <Button variant="ghost" size="sm" onClick={handleAddVariable}>
-                  <Plus className="w-4 h-4" /> Add
-                </Button>
+            {(editingSkill.variables ?? []).map((v, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={v.name}
+                  onChange={(e) => updateVariable(i, "name", e.target.value)}
+                  placeholder="nome"
+                  className="flex-1"
+                />
+                <button onClick={() => removeVariable(i)} className="text-muted-foreground hover:text-destructive">
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
-              
-              {editingSkill.variables?.map((v, i) => (
-                <div key={i} className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
-                  <Input 
-                    placeholder="Name" 
-                    value={v.name} 
-                    onChange={(e) => handleUpdateVariable(i, "name", e.target.value)}
-                    className="h-8"
-                  />
-                  <Button variant="ghost" size="icon" onClick={() => handleRemoveVariable(i)}>
-                    <X className="w-4 h-4 text-red-500" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-          <CardFooter className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={() => setEditingSkill(null)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!editingSkill.name || !editingSkill.template}>Save</Button>
-          </CardFooter>
-        </Card>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" size="sm" onClick={() => setEditingSkill(null)}>Cancelar</Button>
+            <Button size="sm" onClick={() => void handleSave()}>Salvar</Button>
+          </div>
+        </div>
       )}
+
+      {/* Skills list */}
+      <div className="space-y-2">
+        {skills.map((skill) => (
+          <div
+            key={skill.id}
+            className="flex items-start justify-between rounded-lg border border-border p-3"
+          >
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium truncate">{skill.name}</span>
+                <Badge variant="outline" className="text-[10px] shrink-0">{skill.category}</Badge>
+                {skill.isBuiltin && (
+                  <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">{skill.description}</span>
+            </div>
+            {!skill.isBuiltin && (
+              <div className="flex items-center gap-1 ml-2 shrink-0">
+                <button
+                  onClick={() => setEditingSkill(skill)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => void remove(skill.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -22,8 +22,10 @@ import {
   Pencil,
   Shield,
   Square,
+  Wand2,
   X,
 } from "lucide-react";
+import { SkillsPicker } from "../../renderer/src/features/pal/SkillsPicker";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
@@ -809,6 +811,7 @@ export const InputBar = memo(function InputBar({
   onRemoveGrabbedElement,
 }: InputBarProps) {
   const [hasContent, setHasContent] = useState(false);
+  const [isSkillsPickerOpen, setIsSkillsPickerOpen] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -1687,6 +1690,12 @@ export const InputBar = memo(function InputBar({
           />
         )}
 
+        <SkillsPicker
+          open={isSkillsPickerOpen}
+          onApply={(text) => insertTextAtCursor(editableRef.current, text)}
+          onClose={() => setIsSkillsPickerOpen(false)}
+        />
+
         <div className="flex items-center gap-1 px-3 pb-2.5">
           {/* Left controls — scrollable as a defensive fallback (should never trigger with proper MIN_CHAT_WIDTH) */}
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none">
@@ -1696,6 +1705,15 @@ export const InputBar = memo(function InputBar({
               title="Attach image"
             >
               <Paperclip className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Skills picker button */}
+            <button
+              onClick={() => setIsSkillsPickerOpen(true)}
+              className="flex shrink-0 items-center justify-center rounded-lg px-2 py-1 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+              title="Skills PAL"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
             </button>
 
             {/* Voice dictation button */}
