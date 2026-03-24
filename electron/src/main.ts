@@ -46,6 +46,9 @@ import * as mcpIpc from "./ipc/mcp";
 import * as settingsIpc from "./ipc/settings";
 import * as jiraIpc from "./ipc/jira";
 import { onSettingsChanged } from "./ipc/settings";
+import { registerMhAgentConfigHandlers } from "./ipc/mh-agent-config";
+import { registerMhSkillsHandlers } from "./ipc/mh-skills";
+import { registerMhPalSetupHandlers } from "./ipc/mh-pal-setup";
 
 // --- Performance: Chromium/V8 flags (must be set before app.whenReady()) ---
 app.commandLine.appendSwitch("enable-gpu-rasterization"); // force GPU raster for all content
@@ -221,6 +224,9 @@ codexSessionsIpc.register(getMainWindow);
 mcpIpc.register();
 settingsIpc.register();
 jiraIpc.register();
+registerMhAgentConfigHandlers();
+registerMhSkillsHandlers();
+registerMhPalSetupHandlers();
 
 // Listen for analytics settings changes and reinitialize PostHog
 let lastAnalyticsEnabled: boolean | undefined;

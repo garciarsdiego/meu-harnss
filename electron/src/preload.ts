@@ -363,3 +363,13 @@ contextBridge.exposeInMainWorld("claude", {
     currentVersion: () => ipcRenderer.invoke("updater:current-version") as Promise<string>,
   },
 });
+
+// MeuHarnss 2.0 — generic IPC bridge for mh:* channels
+contextBridge.exposeInMainWorld("ipc", {
+  invoke: (channel: string, ...args: unknown[]) => {
+    if (!channel.startsWith("mh:")) {
+      throw new Error(`ipc.invoke: channel must start with "mh:" — got "${channel}"`);
+    }
+    return ipcRenderer.invoke(channel, ...args);
+  },
+});
