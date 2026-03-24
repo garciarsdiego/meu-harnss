@@ -1,17 +1,17 @@
 {
-  "name": "harnss",
-  "version": "0.21.5",
-  "productName": "Harnss",
-  "description": "Harness your AI coding agents — one desktop app for Claude Code, Codex, and any ACP agent",
+  "name": "meu-harnss",
+  "version": "2.0.0",
+  "productName": "MeuHarnss",
+  "description": "MeuHarnss 2.0 — Fork do Harnss com orquestração multi-modelo via PAL",
   "author": {
-    "name": "Dejan Zegarac",
-    "email": "dejanzegarac3@gmail.com"
+    "name": "Diego Garcia",
+    "email": "garciarsdiego@gmail.com"
   },
   "license": "MIT",
-  "homepage": "https://github.com/OpenSource03/harnss",
+  "homepage": "https://github.com/garciarsdiego/meu-harnss",
   "repository": {
     "type": "git",
-    "url": "https://github.com/OpenSource03/harnss.git"
+    "url": "https://github.com/garciarsdiego/meu-harnss.git"
   },
   "main": "electron/dist/main.js",
   "scripts": {
@@ -26,7 +26,8 @@
     "dist:linux": "pnpm build && electron-builder --linux --config electron-builder.config.js",
     "postinstall": "electron-rebuild",
     "test": "vitest run --config vitest.config.electron.ts",
-    "test:watch": "vitest --config vitest.config.electron.ts"
+    "test:watch": "vitest --config vitest.config.electron.ts",
+    "upstream:diff": "git fetch upstream && git diff upstream/main -- electron/src/main.ts electron/src/ipc/claude-sessions.ts renderer/src/components/views/AppLayout.tsx renderer/src/components/ChatComposer.tsx"
   },
   "packageManager": "pnpm@10.26.0",
   "dependencies": {
