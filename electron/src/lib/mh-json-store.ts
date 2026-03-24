@@ -13,6 +13,8 @@ export function generateId(prefix = ""): string {
   return prefix ? `${prefix}_${hash}` : hash;
 }
 
+export const writeJson = writeJsonAtomic;
+
 export async function writeJsonAtomic(
   filePath: string,
   data: unknown
