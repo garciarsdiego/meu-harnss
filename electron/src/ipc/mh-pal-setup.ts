@@ -43,7 +43,8 @@ export function registerMhPalSetupHandlers(): void {
     ): Promise<PalConnectionResult> => {
       const start = Date.now();
       try {
-        const response = await fetch(`${url}/health`, {
+        // /health/liveliness is unauthenticated — just checks if the process is up
+        const response = await fetch(`${url}/health/liveliness`, {
           signal: AbortSignal.timeout(5_000),
         });
         const latencyMs = Date.now() - start;
